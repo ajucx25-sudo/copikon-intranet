@@ -7,5 +7,14 @@
     "gerencia": "root",
     "nombre": "Administrador",
     "role": "admin"
+  },
+  "Yenni": {
+    "username": "Yenni",
+    "password": "1234",
+    "cargoId": "gerente-tienda-copikon-atrium-lara",
+    "cargo": "Gerente Tienda Copikon Atrium Lara",
+    "gerencia": "retail",
+    "nombre": "Yennifer Gallardo",
+    "role": "empleado"
   }
 }

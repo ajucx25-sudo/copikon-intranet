@@ -25,10 +25,13 @@ async function buildAll() {
     const htmlPath = "dist/public/index.html";
     let html = await readFile(htmlPath, "utf-8");
     // Buscar portal-users.json en varias ubicaciones
-    let usersData = { admin: { username:"admin", password:"copikon2026", cargoId:"ceo", cargo:"CEO", gerencia:"root", nombre:"Administrador", role:"admin" } };
-    for (const p of ["../portal-users.json", "../../copikon-organigrama-v2/portal-users.json", "portal-users.json"]) {
+    let usersData: any = { admin: { username:"admin", password:"copikon2026", cargoId:"ceo", cargo:"CEO", gerencia:"root", nombre:"Administrador", role:"admin" } };
+    // Siempre usar el portal-users.json más actualizado
+    for (const p of ["../../copikon-organigrama-v2/portal-users.json", "../portal-users.json", "portal-users.json"]) {
       try { usersData = JSON.parse(await readFile(p, "utf-8")); break; } catch {}
     }
+    // Sincronizar portal-users.json local
+    try { await writeFile("portal-users.json", JSON.stringify(usersData, null, 2), "utf-8"); } catch {}
     // Inyectar también employees.json como contactos
     let employeesData: any = {};
     for (const p of ["../employees.json", "../../copikon-organigrama-v2/employees.json", "employees.json"]) {
