@@ -1,7 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-// API_BASE: lee window.__INTRANET_API__ inyectado en index.html y reemplazado por el proxy en deploy
-const _apiRaw: string = (window as any).__INTRANET_API__ ?? "";
-const API_BASE: string = (!_apiRaw || _apiRaw.startsWith("__")) ? "" : _apiRaw;
+// API_BASE: detecta si estamos en el proxy de Perplexity (sites.pplx.app)
+// En ese caso, usa "port/5000" como prefijo que el proxy entiende
+// En desarrollo local, usa "" (rutas relativas)
+function detectApiBase(): string {
+  // Desde query param (pasado por organigrama)
+  const qs = new URLSearchParams(window.location.search);
+  const fromParam = qs.get("apibase");
+  if (fromParam && fromParam.length > 0) return fromParam;
+  // Desde window.__INTRANET_API__ (inyectado en index.html)
+  const fromWindow = (window as any).__INTRANET_API__ ?? "";
+  if (fromWindow && !fromWindow.startsWith("__")) return fromWindow;
+  // Detectar automáticamente si estamos en el proxy de Perplexity
+  if (window.location.hostname === "sites.pplx.app") return "port/5000";
+  return "";
+}
+const API_BASE: string = detectApiBase();
 
 import { apiRequest } from "./lib/queryClient";
 

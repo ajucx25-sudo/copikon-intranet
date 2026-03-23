@@ -24,8 +24,17 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- API_BASE: inyectado por el proxy de Perplexity en deploy -->
-    <script>window.__INTRANET_API__ = "__PORT_5000__";</script>
+    <!-- API_BASE: leído desde ?apibase= (pasado por el organigrama) o desde __PORT_5000__ -->
+    <script>
+      (function(){
+        var qs = new URLSearchParams(window.location.search);
+        var fromParam = qs.get('apibase');
+        var fromToken = "__PORT_5000__";
+        var resolved = fromParam && fromParam.length > 0 ? fromParam
+          : (fromToken && !fromToken.startsWith('__') ? fromToken : '');
+        window.__INTRANET_API__ = resolved;
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
