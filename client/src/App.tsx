@@ -3,18 +3,27 @@ import { useState, useEffect, useRef, useCallback } from "react";
 // En ese caso, usa "port/5000" como prefijo que el proxy entiende
 // En desarrollo local, usa "" (rutas relativas)
 function detectApiBase(): string {
-  // Desde query param (pasado por organigrama)
   const qs = new URLSearchParams(window.location.search);
   const fromParam = qs.get("apibase");
   if (fromParam && fromParam.length > 0) return fromParam;
-  // Desde window.__INTRANET_API__ (inyectado en index.html)
   const fromWindow = (window as any).__INTRANET_API__ ?? "";
   if (fromWindow && !fromWindow.startsWith("__")) return fromWindow;
-  // Detectar automáticamente si estamos en el proxy de Perplexity
   if (window.location.hostname === "sites.pplx.app") return "/port/5000";
   return "";
 }
 const API_BASE: string = detectApiBase();
+
+// Usuario pre-autenticado desde el organigrama (pasado por ?user=)
+function getAutoLoginUser(): any | null {
+  try {
+    const qs = new URLSearchParams(window.location.search);
+    const raw = qs.get("user");
+    if (!raw) return null;
+    const u = JSON.parse(decodeURIComponent(raw));
+    if (u && u.username) return u;
+  } catch {}
+  return null;
+}
 
 import { apiRequest } from "./lib/queryClient";
 
@@ -785,7 +794,7 @@ function TaskDetailModal({ task, proj, users, me, onClose, onMove, onDelete, onR
 // MAIN APP SHELL
 // ══════════════════════════════════════════════════════════════════
 export default function App() {
-  const [me, setMe] = useState<User|null>(null);
+  const [me, setMe] = useState<User|null>(() => getAutoLoginUser());
   const [users, setUsers] = useState<User[]>([]);
   const [section, setSection] = useState<"direct"|"channels"|"projects">("direct");
   const [totalUnread, setTotalUnread] = useState(0);
