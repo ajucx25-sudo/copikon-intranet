@@ -24,6 +24,8 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- API_BASE: inyectado por el proxy de Perplexity en deploy -->
+    <script>window.__INTRANET_API__ = "__PORT_5000__";</script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

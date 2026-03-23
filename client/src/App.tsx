@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-const API_BASE = ("__PORT_5000__" as string).startsWith("__") ? "" : ("__PORT_5000__" as string);
+// API_BASE: lee window.__INTRANET_API__ inyectado en index.html y reemplazado por el proxy en deploy
+const _apiRaw: string = (window as any).__INTRANET_API__ ?? "";
+const API_BASE: string = (!_apiRaw || _apiRaw.startsWith("__")) ? "" : _apiRaw;
 
 import { apiRequest } from "./lib/queryClient";
 
