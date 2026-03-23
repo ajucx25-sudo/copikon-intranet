@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+const API_BASE = ("__PORT_5000__" as string).startsWith("__") ? "" : ("__PORT_5000__" as string);
+
 import { apiRequest } from "./lib/queryClient";
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -65,7 +67,7 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
     e.preventDefault();
     setError(""); setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch(`${API_BASE}/api/intranet/auth/login`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: user.trim(), password: pass })
       });
@@ -126,12 +128,12 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
 
   // Cargar canales
   useEffect(() => {
-    fetch("/api/channels").then(r=>r.json()).then(setChannels).catch(()=>{});
+    fetch(`${API_BASE}/api/intranet/channels`).then(r=>r.json()).then(setChannels).catch(()=>{});
   }, []);
 
   // SSE
   useEffect(() => {
-    const es = new EventSource(`/api/sse/${me.username}`);
+    const es = new EventSource(`${API_BASE}/api/intranet/sse/${me.username}`);
     es.onmessage = (e) => {
       const { event, data } = JSON.parse(e.data);
       if (event === "new_message") {
@@ -155,11 +157,11 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
     if (!selected) return;
     setMessages([]);
     const url = isChannel
-      ? `/api/channels/${selected}/messages`
-      : `/api/chat/messages/${me.username}/${selected}`;
+      ? `/api/intranet/channels/${selected}/messages`
+      : `/api/intranet/chat/messages/${me.username}/${selected}`;
     fetch(url).then(r=>r.json()).then(msgs => { setMessages(msgs); scrollToBottom(); }).catch(()=>{});
     if (!isChannel) {
-      fetch("/api/chat/read", { method:"POST", headers:{"Content-Type":"application/json"},
+      fetch(`${API_BASE}/api/intranet/chat/read`, { method:"POST", headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ convId:[me.username,selected].sort().join("__"), userId:me.username }) });
       setUnread(u => { const n={...u}; delete n[selected]; return n; });
     }
@@ -167,7 +169,7 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
 
   // Cargar no leídos
   useEffect(() => {
-    fetch(`/api/chat/unread/${me.username}`).then(r=>r.json()).then(setUnread).catch(()=>{});
+    fetch(`${API_BASE}/api/intranet/chat/unread/${me.username}`).then(r=>r.json()).then(setUnread).catch(()=>{});
   }, [me.username]);
 
   const scrollToBottom = useCallback(() => {
@@ -181,7 +183,7 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
     const body = isChannel
       ? { from: me.username, text }
       : { from: me.username, to: selected, text };
-    const url = isChannel ? `/api/channels/${selected}/messages` : "/api/chat/messages";
+    const url = isChannel ? `/api/intranet/channels/${selected}/messages` : "/api/intranet/chat/messages";
     await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
     setText("");
   }
@@ -300,7 +302,7 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
   const [ntDue, setNtDue] = useState(""); const [ntStatus, setNtStatus] = useState("pendiente");
 
   const loadProjects = useCallback(async () => {
-    const data = await fetch("/api/projects").then(r=>r.json()).catch(()=>[]);
+    const data = await fetch(`${API_BASE}/api/intranet/projects`).then(r=>r.json()).catch(()=>[]);
     setProjects(data);
     if (selectedProj) setSelectedProj(data.find((p:Project)=>p.id===selectedProj.id)||null);
   }, [selectedProj]);
@@ -309,7 +311,7 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
 
   // SSE para updates en tiempo real
   useEffect(() => {
-    const es = new EventSource(`/api/sse/${me.username}`);
+    const es = new EventSource(`${API_BASE}/api/intranet/sse/${me.username}`);
     es.onmessage = (e) => {
       const { event } = JSON.parse(e.data);
       if (["task_assigned","task_updated"].includes(event)) loadProjects();
@@ -319,7 +321,7 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
 
   async function createProject() {
     if (!npName.trim()) return;
-    await fetch("/api/projects", { method:"POST", headers:{"Content-Type":"application/json"},
+    await fetch(`${API_BASE}/api/intranet/projects`, { method:"POST", headers:{"Content-Type":"application/json"},
       body:JSON.stringify({ name:npName, desc:npDesc, color:npColor, owner:me.username, members:[] }) });
     setNpName(""); setNpDesc(""); setNpColor("#4a7fd4"); setShowNewProj(false);
     loadProjects();
@@ -327,27 +329,27 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
 
   async function createTask() {
     if (!ntTitle.trim() || !selectedProj) return;
-    await fetch(`/api/projects/${selectedProj.id}/tasks`, { method:"POST", headers:{"Content-Type":"application/json"},
+    await fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method:"POST", headers:{"Content-Type":"application/json"},
       body:JSON.stringify({ title:ntTitle, desc:ntDesc, assignee:ntAssignee||null, priority:ntPriority, dueDate:ntDue||null, status:ntStatus }) });
     setNtTitle(""); setNtDesc(""); setNtAssignee(""); setNtPriority("media"); setNtDue(""); setNtStatus("pendiente");
     setShowNewTask(false); loadProjects();
   }
 
   async function moveTask(taskId: string, projId: string, newStatus: string) {
-    await fetch(`/api/projects/${projId}/tasks/${taskId}`, { method:"PUT", headers:{"Content-Type":"application/json"},
+    await fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method:"PUT", headers:{"Content-Type":"application/json"},
       body:JSON.stringify({ status:newStatus }) });
     loadProjects();
   }
 
   async function deleteTask(taskId: string, projId: string) {
     if (!confirm("¿Eliminar esta tarea?")) return;
-    await fetch(`/api/projects/${projId}/tasks/${taskId}`, { method:"DELETE" });
+    await fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method:"DELETE" });
     setSelectedTask(null); loadProjects();
   }
 
   async function deleteProject(projId: string) {
     if (!confirm("¿Eliminar este proyecto y todas sus tareas?")) return;
-    await fetch(`/api/projects/${projId}`, { method:"DELETE" });
+    await fetch(`${API_BASE}/api/intranet/projects/${projId}`, { method:"DELETE" });
     setSelectedProj(null); loadProjects();
   }
 
@@ -611,13 +613,13 @@ function TaskDetailModal({ task, proj, users, me, onClose, onMove, onDelete, onR
 
   async function addComment() {
     if (!comment.trim()) return;
-    await fetch(`/api/projects/${proj.id}/tasks/${localTask.id}/comments`, {
+    await fetch(`${API_BASE}/api/intranet/projects/${proj.id}/tasks/${localTask.id}/comments`, {
       method:"POST", headers:{"Content-Type":"application/json"},
       body:JSON.stringify({ from:me.username, text:comment })
     });
     setComment(""); onReload();
     // Reload task
-    const projs = await fetch("/api/projects").then(r=>r.json());
+    const projs = await fetch(`${API_BASE}/api/intranet/projects`).then(r=>r.json());
     const p = projs.find((p:Project)=>p.id===proj.id);
     const t = p?.tasks?.find((t:Task)=>t.id===localTask.id);
     if (t) setLocalTask(t);
@@ -695,10 +697,10 @@ export default function App() {
 
   useEffect(() => {
     if (!me) return;
-    fetch("/api/auth/users").then(r=>r.json()).then(setUsers).catch(()=>{});
+    fetch(`${API_BASE}/api/intranet/auth/users`).then(r=>r.json()).then(setUsers).catch(()=>{});
     // Poll unread count
     const poll = setInterval(() => {
-      fetch(`/api/chat/unread/${me.username}`).then(r=>r.json()).then((u:Record<string,number>) => {
+      fetch(`${API_BASE}/api/intranet/chat/unread/${me.username}`).then(r=>r.json()).then((u:Record<string,number>) => {
         setTotalUnread(Object.values(u).reduce((a,b)=>a+b,0));
       }).catch(()=>{});
     }, 8000);
