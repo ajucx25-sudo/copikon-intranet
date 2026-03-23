@@ -221,41 +221,96 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
     setText("");
   }
 
+  const [contactSearch, setContactSearch] = useState("");
   const otherUsers = users.filter(u => u.username !== me.username);
   const selUser = users.find(u => u.username === selected);
   const selChannel = channels.find(c => c.id === selected);
   const selColor = isChannel ? (selChannel?.color || "#2bbfae") : (GER_COLORS[selUser?.gerencia||""] || "#888");
 
+  // Filtrar y agrupar contactos por gerencia
+  const filteredContacts = otherUsers.filter(u => {
+    if (!contactSearch.trim()) return true;
+    const q = contactSearch.toLowerCase();
+    return (u.nombre||"").toLowerCase().includes(q) || (u.cargo||"").toLowerCase().includes(q) || (GER_NAMES[u.gerencia]||"").toLowerCase().includes(q);
+  });
+  const contactGroups: Record<string, any[]> = {};
+  const gerOrder = ["root","comercializacion","operaciones","finanzas","compras","retail","it","proyectos","staff"];
+  filteredContacts.forEach(u => {
+    const g = u.gerencia || "otros";
+    if (!contactGroups[g]) contactGroups[g] = [];
+    contactGroups[g].push(u);
+  });
+
   return (
     <div style={{ display:"flex", height:"100%", overflow:"hidden" }}>
       {/* Sidebar lista */}
-      <div className="list-sidebar" style={{ width:240, display:"flex", flexDirection:"column", flexShrink:0, overflowY:"auto" }}>
-        <div style={{ padding:"12px 14px 8px", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:".06em", color:"var(--muted-foreground)" }}>
-          {isChannel ? "Canales" : "Mensajes directos"}
+      <div className="list-sidebar" style={{ width:260, display:"flex", flexDirection:"column", flexShrink:0 }}>
+        {/* Búsqueda */}
+        {!isChannel && (
+          <div style={{ padding:"10px 10px 6px" }}>
+            <input value={contactSearch} onChange={e=>setContactSearch(e.target.value)}
+              placeholder="Buscar contacto..." className="chat-input"
+              style={{ width:"100%", fontSize:12, padding:"7px 12px", borderRadius:20, border:"1.5px solid #e0e7ef", background:"#fff", fontFamily:"inherit", outline:"none", boxSizing:"border-box" as any }} />
+          </div>
+        )}
+        <div style={{ padding: isChannel ? "12px 14px 8px" : "4px 14px 6px", fontSize:11, fontWeight:700, textTransform:"uppercase" as any, letterSpacing:".06em", color:"var(--muted-foreground)" }}>
+          {isChannel ? "Canales" : `Contactos (${filteredContacts.length})`}
         </div>
-        {(isChannel ? channels : otherUsers).map((item: any) => {
-          const id = isChannel ? item.id : item.username;
-          const name = isChannel ? item.name : (item.nombre || item.username);
-          const sub = isChannel ? item.desc : item.cargo;
-          const color = isChannel ? item.color : (GER_COLORS[item.gerencia]||"#888");
-          const unreadCount = !isChannel ? (unread[id]||0) : 0;
+        <div style={{ overflowY:"auto", flex:1 }}>
+        {isChannel ? channels.map((item: any) => {
+          const id = item.id;
+          const color = item.color;
           return (
             <div key={id} onClick={() => setSelected(id)}
               className={selected===id ? 'list-item list-item-active' : 'list-item'}
-              style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 14px", cursor:"pointer",
-                background: selected===id ? "#dce8ff" : "transparent",
-                borderRadius:10, margin:"2px 8px" }}>
-              {isChannel
-                ? <div style={{ width:32, height:32, borderRadius:8, background:color, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:14, fontWeight:700, flexShrink:0 }}>#</div>
-                : <Avatar user={item} size={32} />}
+              style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 14px", cursor:"pointer", borderRadius:10, margin:"2px 8px" }}>
+              <div style={{ width:32, height:32, borderRadius:8, background:color, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:14, fontWeight:700, flexShrink:0 }}>#</div>
               <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:13, fontWeight:selected===id?700:500, color:"var(--foreground)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{name}</div>
-                <div style={{ fontSize:11, color:"var(--muted-foreground)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{sub}</div>
+                <div style={{ fontSize:13, fontWeight:selected===id?700:500, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{item.name}</div>
+                <div style={{ fontSize:11, color:"var(--muted-foreground)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{item.desc}</div>
               </div>
-              {unreadCount > 0 && <div style={{ background:"#ef4444", color:"#fff", borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:700, flexShrink:0 }}>{unreadCount}</div>}
             </div>
           );
-        })}
+        }) : (
+          // Contactos agrupados por gerencia
+          (contactSearch.trim() ? ["sin_grupo"] : gerOrder).map(gKey => {
+            const groupUsers = contactSearch.trim() ? filteredContacts : (contactGroups[gKey] || []);
+            if (!groupUsers.length) return null;
+            const gColor = GER_COLORS[gKey] || "#888";
+            const gName = GER_NAMES[gKey] || gKey;
+            return (
+              <div key={gKey}>
+                {!contactSearch.trim() && (
+                  <div style={{ padding:"8px 14px 3px", fontSize:10, fontWeight:800, textTransform:"uppercase" as any, letterSpacing:".07em", color:gColor, display:"flex", alignItems:"center", gap:5 }}>
+                    <div style={{ width:6, height:6, borderRadius:"50%", background:gColor, flexShrink:0 }} />
+                    {gName}
+                  </div>
+                )}
+                {groupUsers.map((u: any) => {
+                  const id = u.username;
+                  const name = u.nombre || u.cargo || id;
+                  const unreadCount = unread[id]||0;
+                  return (
+                    <div key={id} onClick={() => setSelected(id)}
+                      className={selected===id ? 'list-item list-item-active' : 'list-item'}
+                      style={{ display:"flex", alignItems:"center", gap:9, padding:"7px 14px", cursor:"pointer", borderRadius:10, margin:"1px 8px" }}>
+                      <Avatar user={u} size={30} />
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:12.5, fontWeight:selected===id?700:500, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                          {name || <span style={{color:"var(--muted-foreground)",fontStyle:"italic"}}>Sin nombre</span>}
+                        </div>
+                        <div style={{ fontSize:10.5, color:"var(--muted-foreground)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{u.cargo}</div>
+                      </div>
+                      {unreadCount > 0 && <div style={{ background:"#ef4444", color:"#fff", borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:700, flexShrink:0 }}>{unreadCount}</div>}
+                      {!(u as any).hasAccount && <div style={{ width:6, height:6, borderRadius:"50%", background:"#dde3f0", flexShrink:0 }} title="Sin cuenta de acceso" />}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })
+        )}
+        </div>
       </div>
 
       {/* Área de mensajes */}
