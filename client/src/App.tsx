@@ -179,32 +179,75 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
     es.onmessage = (e) => {
       const { event, data } = JSON.parse(e.data);
       if (event === "new_message") {
+        const convId = [data.from, data.to].sort().join("__");
+        const convKey = data.from === me.username ? data.to : data.from;
         setMessages(prev => {
-          if (isChannel ? data.channelId === selected : ([data.from,data.to].sort().join("__") === [me.username, selected].sort().join("__")))
-            return [...prev, data];
+          const isActive = isChannel ? data.channelId === selected : ([data.from,data.to].sort().join("__") === [me.username, selected].sort().join("__"));
+          if (isActive) {
+            const updated = [...prev, data];
+            msgStore.current[convKey] = (msgStore.current[convKey] || []).concat(data).slice(-200);
+            return updated;
+          }
           return prev;
         });
+        // Guardar en memoria aunque no esté en la conversación activa
+        const storedDirect = msgStore.current[convKey] || [];
+        if (!storedDirect.find(m => m.id === data.id)) {
+          msgStore.current[convKey] = [...storedDirect, data].slice(-200);
+        }
         if (!isChannel && data.to === me.username && data.from !== selected)
           setUnread(u => ({ ...u, [data.from]: (u[data.from]||0)+1 }));
       }
       if (event === "channel_message") {
-        setMessages(prev => data.channelId === selected ? [...prev, data] : prev);
+        setMessages(prev => {
+          if (data.channelId === selected) {
+            const updated = [...prev, data];
+            msgStore.current[data.channelId] = (msgStore.current[data.channelId] || []).concat(data).slice(-200);
+            return updated;
+          }
+          return prev;
+        });
+        // Guardar canal en memoria
+        const storedCh = msgStore.current[data.channelId] || [];
+        if (!storedCh.find((m: Message) => m.id === data.id)) {
+          msgStore.current[data.channelId] = [...storedCh, data].slice(-200);
+        }
       }
     };
     return () => es.close();
   }, [me.username, selected, isChannel]);
 
+  // ── Store en memoria (persiste mientras dure la sesión) ───────────
+  const msgStore = useRef<Record<string, Message[]>>({});
+  function lsLoad(id: string): Message[] { return msgStore.current[id] || []; }
+  function lsSave(id: string, msgs: Message[]) { msgStore.current[id] = msgs.slice(-200); }
+
   // Cargar mensajes al seleccionar
   useEffect(() => {
     if (!selected) return;
-    setMessages([]);
+    // Cargar desde memoria de sesión primero (instantáneo)
+    const cached = lsLoad(selected);
+    setMessages(cached);
+    if (cached.length > 0) scrollToBottom();
+    // Luego intentar sincronizar desde el servidor
     const url = isChannel
       ? `${API_BASE}/api/intranet/channels/${selected}/messages`
       : `${API_BASE}/api/intranet/chat/messages/${me.username}/${selected}`;
-    fetch(url).then(r=>r.json()).then(msgs => { setMessages(msgs); scrollToBottom(); }).catch(()=>{});
+    fetch(url).then(r=>r.ok ? r.json() : Promise.reject()).then(msgs => {
+      if (msgs && msgs.length > 0) {
+        // Fusionar server + local, evitar duplicados por id
+        const merged = [...msgs];
+        const serverIds = new Set(msgs.map((m: Message) => m.id));
+        cached.forEach(m => { if (!serverIds.has(m.id)) merged.push(m); });
+        merged.sort((a,b) => a.ts - b.ts);
+        setMessages(merged);
+        lsSave(selected, merged);
+        scrollToBottom();
+      }
+    }).catch(()=>{});
     if (!isChannel) {
       fetch(`${API_BASE}/api/intranet/chat/read`, { method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ convId:[me.username,selected].sort().join("__"), userId:me.username }) });
+        body: JSON.stringify({ convId:[me.username,selected].sort().join("__"), userId:me.username }) }).catch(()=>{});
       setUnread(u => { const n={...u}; delete n[selected]; return n; });
     }
   }, [selected, isChannel, me.username]);
@@ -226,11 +269,17 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
       ? { from: me.username, text }
       : { from: me.username, to: selected, text };
     const url = isChannel ? `${API_BASE}/api/intranet/channels/${selected}/messages` : `${API_BASE}/api/intranet/chat/messages`;
-    await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) }).catch(()=>{});
-    // Mostrar mensaje localmente aunque falle el servidor
     const localMsg: Message = { id: Date.now().toString(), from: me.username, to: selected||undefined, channelId: isChannel ? selected||undefined : undefined, text: text.trim(), ts: Date.now() };
-    setMessages(prev => [...prev, localMsg]);
+    // Mostrar inmediatamente
+    setMessages(prev => {
+      const updated = [...prev, localMsg];
+      lsSave(selected, updated);
+      return updated;
+    });
     setText("");
+    scrollToBottom();
+    // Enviar al servidor en background
+    fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) }).catch(()=>{});
   }
 
   const [contactSearch, setContactSearch] = useState("");
