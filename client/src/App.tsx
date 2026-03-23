@@ -229,7 +229,7 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
   return (
     <div style={{ display:"flex", height:"100%", overflow:"hidden" }}>
       {/* Sidebar lista */}
-      <div style={{ width:240, borderRight:"1px solid var(--border)", display:"flex", flexDirection:"column", flexShrink:0, overflowY:"auto" }}>
+      <div className="list-sidebar" style={{ width:240, display:"flex", flexDirection:"column", flexShrink:0, overflowY:"auto" }}>
         <div style={{ padding:"12px 14px 8px", fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:".06em", color:"var(--muted-foreground)" }}>
           {isChannel ? "Canales" : "Mensajes directos"}
         </div>
@@ -241,9 +241,10 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
           const unreadCount = !isChannel ? (unread[id]||0) : 0;
           return (
             <div key={id} onClick={() => setSelected(id)}
+              className={selected===id ? 'list-item list-item-active' : 'list-item'}
               style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 14px", cursor:"pointer",
-                background: selected===id ? "var(--accent)" : "transparent",
-                borderRadius:8, margin:"1px 6px" }}>
+                background: selected===id ? "#dce8ff" : "transparent",
+                borderRadius:10, margin:"2px 8px" }}>
               {isChannel
                 ? <div style={{ width:32, height:32, borderRadius:8, background:color, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:14, fontWeight:700, flexShrink:0 }}>#</div>
                 : <Avatar user={item} size={32} />}
@@ -281,9 +282,9 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
                   {isChannel && !isMe && <Avatar user={sender} size={26} />}
                   <div style={{ maxWidth:"68%" }}>
                     {isChannel && !isMe && <div style={{ fontSize:10, fontWeight:700, color:GER_COLORS[sender?.gerencia||""]||"#888", marginBottom:2, marginLeft:4 }}>{sender?.nombre||m.from}</div>}
-                    <div style={{ background: isMe ? selColor : "var(--accent)", color: isMe ? "#fff" : "var(--foreground)",
-                      padding:"8px 12px", borderRadius: isMe ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
-                      fontSize:13.5, lineHeight:1.45, boxShadow:"0 1px 3px rgba(0,0,0,.08)" }}>
+                    <div className={isMe ? 'msg-me' : 'msg-other'}
+                      style={{ padding:"8px 12px", borderRadius: isMe ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
+                      fontSize:13.5, lineHeight:1.45 }}>
                       {m.text}
                     </div>
                     <div style={{ fontSize:10, color:"var(--muted-foreground)", textAlign: isMe?"right":"left", marginTop:2, paddingInline:4 }}>{fmtTime(m.ts)}</div>
@@ -294,12 +295,13 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
             <div ref={messagesEndRef} />
           </div>
           {/* Input */}
-          <div style={{ padding:"10px 16px", borderTop:"1px solid var(--border)", display:"flex", gap:8 }}>
+          <div className="chat-input-wrap" style={{ padding:"12px 16px", display:"flex", gap:8 }}>
             <input value={text} onChange={e=>setText(e.target.value)}
               onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage();} }}
               placeholder={`Mensaje${isChannel?" en #"+selChannel?.name:""}`}
-              style={{ flex:1, padding:"9px 14px", borderRadius:22, border:"1.5px solid var(--border)",
-                background:"var(--background)", fontSize:13.5, fontFamily:"inherit", outline:"none" }} />
+              className="chat-input"
+              style={{ flex:1, padding:"10px 18px", borderRadius:24, border:"1.5px solid #e0e7ef",
+                background:"#f7f9fc", fontSize:13.5, fontFamily:"inherit", outline:"none" }} />
             <button onClick={sendMessage}
               style={{ padding:"9px 18px", borderRadius:22, border:"none", background:selColor,
                 color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}>Enviar</button>
@@ -393,7 +395,7 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
   return (
     <div style={{ display:"flex", height:"100%", overflow:"hidden" }}>
       {/* Sidebar proyectos */}
-      <div style={{ width:220, borderRight:"1px solid var(--border)", display:"flex", flexDirection:"column", overflowY:"auto", flexShrink:0 }}>
+      <div className="proj-sidebar" style={{ width:220, display:"flex", flexDirection:"column", overflowY:"auto", flexShrink:0 }}>
         <div style={{ padding:"12px 14px 4px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <span style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:".06em", color:"var(--muted-foreground)" }}>Proyectos</span>
           {(me.role==="admin"||me.role==="editor") && (
@@ -478,12 +480,13 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
                   const colTasks = tasks.filter(t=>t.status===col.id);
                   return (
                     <div key={col.id}
-                      style={{ width:240, flexShrink:0, background:"var(--accent)", borderRadius:12, padding:10, minHeight:120 }}
+                      className="kanban-col"
+                      style={{ width:240, flexShrink:0, borderRadius:14, padding:10, minHeight:120 }}
                       onDragOver={e=>e.preventDefault()}
                       onDrop={()=>{ if(dragTask) moveTask(dragTask.task.id, dragTask.projId, col.id); setDragTask(null); }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10 }}>
+                      <div className="kanban-col-header" style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10 }}>
                         <div style={{ width:8, height:8, borderRadius:"50%", background:col.color }} />
-                        <span style={{ fontWeight:700, fontSize:12 }}>{col.label}</span>
+                        <span style={{ fontWeight:800, fontSize:11.5, letterSpacing:".05em" }}>{col.label}</span>
                         <span style={{ marginLeft:"auto", background:"var(--border)", borderRadius:10, padding:"1px 7px", fontSize:11, color:"var(--muted-foreground)" }}>{colTasks.length}</span>
                       </div>
                       {colTasks.map(t => (
@@ -610,8 +613,9 @@ function TaskCard({ task, projId, users, me, onClick, onDragStart, onMove }: any
   const assignee = users.find((u:User)=>u.username===task.assignee);
   return (
     <div draggable onDragStart={onDragStart} onClick={onClick}
-      style={{ background:"var(--card)",borderRadius:10,padding:"10px 12px",marginBottom:8,
-        cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,.07)",border:"1px solid var(--border)" }}>
+      className="task-card"
+      style={{ padding:"10px 12px",marginBottom:8,
+        cursor:"pointer" }}>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6,marginBottom:6 }}>
         <div style={{ fontWeight:600,fontSize:13,lineHeight:1.35 }}>{task.title}</div>
         <PriorityDot priority={task.priority} />
@@ -753,16 +757,17 @@ export default function App() {
   return (
     <div style={{ display:"flex", height:"100vh", overflow:"hidden", fontFamily:"system-ui,sans-serif", background:"var(--background)", color:"var(--foreground)" }}>
       {/* Sidebar izquierdo nav */}
-      <div style={{ width:64, background:"var(--card)", borderRight:"1px solid var(--border)", display:"flex", flexDirection:"column", alignItems:"center", padding:"14px 0", gap:4, flexShrink:0 }}>
+      <div className="app-sidebar" style={{ width:64, display:"flex", flexDirection:"column", alignItems:"center", padding:"14px 0", gap:4, flexShrink:0 }}>
         {/* Logo */}
         <div style={{ marginBottom:12 }}>
           <img src="./copikon-logo.jpg" style={{ width:36, height:36, borderRadius:8, objectFit:"cover" }} alt="Copikon" />
         </div>
         {NAV.map(n=>(
           <button key={n.id} onClick={()=>setSection(n.id as any)} title={n.label}
+            className={section===n.id ? 'nav-btn nav-btn-active' : 'nav-btn'}
             style={{ position:"relative", width:44, height:44, borderRadius:12, border:"none", cursor:"pointer",
-              background: section===n.id ? gerColor : "transparent",
-              color: section===n.id ? "#fff" : "var(--muted-foreground)",
+              background: section===n.id ? "rgba(255,255,255,0.15)" : "transparent",
+              color: section===n.id ? "#fff" : "rgba(255,255,255,0.7)",
               fontSize: n.id==="channels" ? 16 : 20, fontWeight:800,
               display:"flex", alignItems:"center", justifyContent:"center", transition:"all .15s" }}>
             {n.icon}
@@ -775,7 +780,7 @@ export default function App() {
           <Avatar user={me} size={36} />
         </div>
         <button onClick={()=>setMe(null)} title="Cerrar sesión"
-          style={{ width:44,height:44,borderRadius:12,border:"none",cursor:"pointer",background:"transparent",color:"var(--muted-foreground)",fontSize:18, display:"flex",alignItems:"center",justifyContent:"center" }}>
+          style={{ width:44,height:44,borderRadius:12,border:"none",cursor:"pointer",background:"transparent",color:"rgba(255,255,255,0.6)",fontSize:18, display:"flex",alignItems:"center",justifyContent:"center" }}>
           ↩
         </button>
       </div>
@@ -783,7 +788,7 @@ export default function App() {
       {/* Contenido principal */}
       <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
         {/* Top bar */}
-        <div style={{ padding:"10px 20px", borderBottom:"1px solid var(--border)", background:"var(--card)", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
+        <div className="app-topbar" style={{ padding:"10px 20px", display:"flex", alignItems:"center", gap:12, flexShrink:0 }}>
           <div style={{ fontWeight:800, fontSize:15 }}>
             {section==="direct" && "Mensajes directos"}
             {section==="channels" && "Canales"}
@@ -808,14 +813,98 @@ export default function App() {
 
       {/* CSS helpers */}
       <style>{`
-        .inp { width:100%; padding:8px 12px; border-radius:8px; border:1.5px solid var(--border);
-          background:var(--background); color:var(--foreground); font-size:13px; font-family:inherit;
-          outline:none; box-sizing:border-box; }
-        .inp:focus { border-color:var(--primary); }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', 'Segoe UI', system-ui, sans-serif; }
+
+        /* Sidebar oscuro */
+        .app-sidebar {
+          background: linear-gradient(180deg, #0d1b35 0%, #1a3a6b 100%) !important;
+          box-shadow: 2px 0 20px rgba(0,0,0,0.3) !important;
+          border-right: none !important;
+        }
+        .nav-btn { transition: all .15s !important; }
+        .nav-btn-active { background: rgba(255,255,255,0.15) !important; }
+        .nav-btn:hover { background: rgba(255,255,255,0.1) !important; }
+
+        /* Topbar */
+        .app-topbar {
+          background: #fff !important;
+          border-bottom: 1px solid #e8edf5 !important;
+          box-shadow: 0 1px 6px rgba(0,0,0,0.06) !important;
+        }
+
+        /* Sidebar de lista (contactos/canales) */
+        .list-sidebar {
+          background: #f7f9fc !important;
+          border-right: 1px solid #e8edf5 !important;
+        }
+        .list-item { border-radius: 10px !important; margin: 2px 8px !important; transition: background .15s; }
+        .list-item:hover { background: #eef2fa !important; }
+        .list-item-active { background: #dce8ff !important; }
+
+        /* Chat */
+        .msg-me {
+          background: linear-gradient(135deg, #1a3a6b, #2a5298) !important;
+          color: #fff !important;
+          box-shadow: 0 2px 8px rgba(26,58,107,0.3) !important;
+        }
+        .msg-other {
+          background: #f0f4ff !important;
+          color: #1a2238 !important;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important;
+        }
+        .chat-input-wrap {
+          background: #fff !important;
+          border-top: 1px solid #e8edf5 !important;
+          padding: 12px 16px !important;
+        }
+        .chat-input {
+          background: #f7f9fc !important;
+          border: 1.5px solid #e0e7ef !important;
+          border-radius: 24px !important;
+          padding: 10px 18px !important;
+          transition: border-color .15s;
+        }
+        .chat-input:focus { border-color: #4a7fd4 !important; }
+
+        /* Kanban */
+        .kanban-col {
+          background: #f4f7fb !important;
+          border: 1px solid #e4eaf4 !important;
+          border-radius: 14px !important;
+        }
+        .kanban-col-header { font-size: 11.5px !important; font-weight: 800 !important; letter-spacing: .05em !important; }
+        .task-card {
+          background: #fff !important;
+          border: 1px solid #e8edf5 !important;
+          border-radius: 12px !important;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
+          transition: box-shadow .15s, transform .1s !important;
+        }
+        .task-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.1) !important; transform: translateY(-1px) !important; }
+
+        /* Project sidebar */
+        .proj-sidebar {
+          background: #f7f9fc !important;
+          border-right: 1px solid #e8edf5 !important;
+        }
+
+        /* General inputs */
+        .inp {
+          width:100%; padding:8px 12px; font-size:13px; font-family:inherit;
+          outline:none; box-sizing:border-box;
+          background: #f7f9fc !important;
+          border: 1.5px solid #dde3f0 !important;
+          border-radius: 9px !important;
+          color: #1a2238 !important;
+        }
+        .inp:focus { border-color: #4a7fd4 !important; outline: none !important; }
         select.inp { cursor:pointer; }
         textarea.inp { resize:vertical; }
+
         ::-webkit-scrollbar { width:5px; }
-        ::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+        ::-webkit-scrollbar-thumb { background:#d0d8e8; border-radius:4px; }
+        ::-webkit-scrollbar-thumb:hover { background:#b8c4d8; }
       `}</style>
     </div>
   );
