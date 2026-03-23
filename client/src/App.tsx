@@ -190,8 +190,8 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
     if (!selected) return;
     setMessages([]);
     const url = isChannel
-      ? `/api/intranet/channels/${selected}/messages`
-      : `/api/intranet/chat/messages/${me.username}/${selected}`;
+      ? `${API_BASE}/api/intranet/channels/${selected}/messages`
+      : `${API_BASE}/api/intranet/chat/messages/${me.username}/${selected}`;
     fetch(url).then(r=>r.json()).then(msgs => { setMessages(msgs); scrollToBottom(); }).catch(()=>{});
     if (!isChannel) {
       fetch(`${API_BASE}/api/intranet/chat/read`, { method:"POST", headers:{"Content-Type":"application/json"},
@@ -216,8 +216,11 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
     const body = isChannel
       ? { from: me.username, text }
       : { from: me.username, to: selected, text };
-    const url = isChannel ? `/api/intranet/channels/${selected}/messages` : "/api/intranet/chat/messages";
-    await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) });
+    const url = isChannel ? `${API_BASE}/api/intranet/channels/${selected}/messages` : `${API_BASE}/api/intranet/chat/messages`;
+    await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) }).catch(()=>{});
+    // Mostrar mensaje localmente aunque falle el servidor
+    const localMsg: Message = { id: Date.now().toString(), from: me.username, to: selected||undefined, channelId: isChannel ? selected||undefined : undefined, text: text.trim(), ts: Date.now() };
+    setMessages(prev => [...prev, localMsg]);
     setText("");
   }
 
