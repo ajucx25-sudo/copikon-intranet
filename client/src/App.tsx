@@ -798,11 +798,16 @@ export default function App() {
         const orgEmps: Record<string,any> = (window as any).__ORG_EMPLOYEES__ || {};
         const result: User[] = [];
         const seen = new Set<string>();
-        // Primero usuarios con cuenta
+        // Mapa de employees para fusión de nombre
+        const empMap: Record<string,any> = {};
+        Object.values(orgEmps).forEach((e: any) => { empMap[e.id] = e; });
+        // Primero usuarios con cuenta — nombre de employees tiene prioridad
         Object.values(portalUsers).forEach((u: any) => {
           if (u.username === me?.username) return;
           const { password: _, ...safe } = u;
-          result.push({ ...safe, hasAccount: true } as any);
+          const empData = empMap[u.cargoId] || {};
+          const nombre = (empData.nombre && empData.nombre.trim()) ? empData.nombre : (u.nombre || '');
+          result.push({ ...safe, nombre, hasAccount: true } as any);
           seen.add(u.username);
           if (u.cargoId) seen.add(u.cargoId);
         });
