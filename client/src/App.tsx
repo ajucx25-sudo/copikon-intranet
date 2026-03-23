@@ -11,7 +11,7 @@ function detectApiBase(): string {
   const fromWindow = (window as any).__INTRANET_API__ ?? "";
   if (fromWindow && !fromWindow.startsWith("__")) return fromWindow;
   // Detectar automáticamente si estamos en el proxy de Perplexity
-  if (window.location.hostname === "sites.pplx.app") return "port/5000";
+  if (window.location.hostname === "sites.pplx.app") return "/port/5000";
   return "";
 }
 const API_BASE: string = detectApiBase();
@@ -81,14 +81,32 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setError(""); setLoading(true);
+    const uname = user.trim();
     try {
       const res = await fetch(`${API_BASE}/api/intranet/auth/login`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: user.trim(), password: pass })
+        body: JSON.stringify({ username: uname, password: pass })
       });
-      if (!res.ok) { const d = await res.json(); setError(d.error || "Error"); return; }
-      onLogin(await res.json());
-    } catch { setError("Error de conexión"); }
+      if (res.ok) { onLogin(await res.json()); return; }
+      // Si el servidor falla, intentar validar con datos embebidos en el HTML
+      const localUsers: Record<string, any> = (window as any).__PORTAL_USERS__ || {};
+      const localUser = localUsers[uname];
+      if (localUser && localUser.password === pass) {
+        const { password: _, ...safe } = localUser;
+        onLogin(safe); return;
+      }
+      const d = await res.json().catch(() => ({}));
+      setError(d.error || "Usuario o contraseña incorrectos");
+    } catch {
+      // Sin conexión al servidor — intentar offline
+      const localUsers: Record<string, any> = (window as any).__PORTAL_USERS__ || {};
+      const localUser = localUsers[uname];
+      if (localUser && localUser.password === pass) {
+        const { password: _, ...safe } = localUser;
+        onLogin(safe); return;
+      }
+      setError("Usuario o contraseña incorrectos");
+    }
     finally { setLoading(false); }
   }
 

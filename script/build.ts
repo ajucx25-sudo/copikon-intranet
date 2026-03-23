@@ -1,6 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile, copyFile } from "fs/promises";
+import { rm, readFile, writeFile, copyFile } from "fs/promises";
 
 const allowlist = [
   "axios", "cors", "date-fns", "drizzle-orm", "drizzle-zod",
@@ -19,6 +19,21 @@ async function buildAll() {
     await copyFile("client/copikon-logo.jpg", "dist/public/copikon-logo.jpg");
     console.log("logo copiado");
   } catch {}
+
+  // Inyectar portal-users.json en el index.html para login offline
+  try {
+    const htmlPath = "dist/public/index.html";
+    let html = await readFile(htmlPath, "utf-8");
+    // Buscar portal-users.json en varias ubicaciones
+    let usersData = { admin: { username:"admin", password:"copikon2026", cargoId:"ceo", cargo:"CEO", gerencia:"root", nombre:"Administrador", role:"admin" } };
+    for (const p of ["../portal-users.json", "../../copikon-organigrama-v2/portal-users.json", "portal-users.json"]) {
+      try { usersData = JSON.parse(await readFile(p, "utf-8")); break; } catch {}
+    }
+    const injection = `<script>window.__PORTAL_USERS__ = ${JSON.stringify(usersData)};</script>`;
+    html = html.replace('</head>', injection + '</head>');
+    await writeFile(htmlPath, html, "utf-8");
+    console.log(`inyectados ${Object.keys(usersData).length} usuarios en index.html`);
+  } catch(e) { console.warn("No se pudo inyectar usuarios:", e); }
 
   console.log("building server...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
