@@ -789,7 +789,31 @@ export default function App() {
 
   useEffect(() => {
     if (!me) return;
-    fetch(`${API_BASE}/api/intranet/auth/users`).then(r=>r.json()).then(setUsers).catch(()=>{});
+    fetch(`${API_BASE}/api/intranet/auth/users`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(setUsers)
+      .catch(() => {
+        // Fallback: construir lista desde datos inyectados en el HTML
+        const portalUsers: Record<string,any> = (window as any).__PORTAL_USERS__ || {};
+        const orgEmps: Record<string,any> = (window as any).__ORG_EMPLOYEES__ || {};
+        const result: User[] = [];
+        const seen = new Set<string>();
+        // Primero usuarios con cuenta
+        Object.values(portalUsers).forEach((u: any) => {
+          if (u.username === me?.username) return;
+          const { password: _, ...safe } = u;
+          result.push({ ...safe, hasAccount: true } as any);
+          seen.add(u.username);
+          if (u.cargoId) seen.add(u.cargoId);
+        });
+        // Luego todos los empleados del organigrama
+        Object.values(orgEmps).forEach((e: any) => {
+          if (seen.has(e.id)) return;
+          result.push({ username: e.id, nombre: e.nombre||'', cargo: e.cargo||'', cargoId: e.id, gerencia: e.gerencia||'', role: 'empleado', hasAccount: false } as any);
+          seen.add(e.id);
+        });
+        setUsers(result);
+      });
     // Poll unread count
     const poll = setInterval(() => {
       fetch(`${API_BASE}/api/intranet/chat/unread/${me.username}`).then(r=>r.json()).then((u:Record<string,number>) => {

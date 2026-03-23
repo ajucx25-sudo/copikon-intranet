@@ -29,11 +29,16 @@ async function buildAll() {
     for (const p of ["../portal-users.json", "../../copikon-organigrama-v2/portal-users.json", "portal-users.json"]) {
       try { usersData = JSON.parse(await readFile(p, "utf-8")); break; } catch {}
     }
-    const injection = `<script>window.__PORTAL_USERS__ = ${JSON.stringify(usersData)};</script>`;
+    // Inyectar también employees.json como contactos
+    let employeesData: any = {};
+    for (const p of ["../employees.json", "../../copikon-organigrama-v2/employees.json", "employees.json"]) {
+      try { employeesData = JSON.parse(await readFile(p, "utf-8")); break; } catch {}
+    }
+    const injection = `<script>window.__PORTAL_USERS__ = ${JSON.stringify(usersData)};window.__ORG_EMPLOYEES__ = ${JSON.stringify(employeesData)};</script>`;
     html = html.replace('</head>', injection + '</head>');
     await writeFile(htmlPath, html, "utf-8");
-    console.log(`inyectados ${Object.keys(usersData).length} usuarios en index.html`);
-  } catch(e) { console.warn("No se pudo inyectar usuarios:", e); }
+    console.log(`inyectados ${Object.keys(usersData).length} usuarios y ${Object.keys(employeesData).length} empleados en index.html`);
+  } catch(e) { console.warn("No se pudo inyectar datos:", e); }
 
   console.log("building server...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
