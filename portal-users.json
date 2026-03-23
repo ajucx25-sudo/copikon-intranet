@@ -1,0 +1,11 @@
+{
+  "admin": {
+    "username": "admin",
+    "password": "copikon2026",
+    "cargoId": "ceo",
+    "cargo": "CEO",
+    "gerencia": "root",
+    "nombre": "Administrador",
+    "role": "admin"
+  }
+}
