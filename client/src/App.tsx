@@ -798,6 +798,8 @@ export default function App() {
   const [users, setUsers] = useState<User[]>([]);
   const [section, setSection] = useState<"direct"|"channels"|"projects">("direct");
   const [totalUnread, setTotalUnread] = useState(0);
+  const [unreadChannels, setUnreadChannels] = useState<Record<string,number>>({});
+  const [toast, setToast] = useState<{msg:string; from:string; color:string; section:string}|null>(null);
 
   useEffect(() => {
     if (!me) return;
@@ -831,24 +833,59 @@ export default function App() {
         });
         setUsers(result);
       });
+    // SSE global para notificaciones
+    const es = new EventSource(`${API_BASE}/api/intranet/sse/${me.username}`);
+    es.onmessage = (e) => {
+      try {
+        const { event, data } = JSON.parse(e.data);
+        if (event === "new_message" && data.to === me.username) {
+          setTotalUnread(n => n + 1);
+          // Toast de notificación
+          const sender = data.from;
+          setToast({ msg: data.text?.slice(0,60) || "Nuevo mensaje", from: sender, color: "#1a3a6b", section: "direct" });
+          setTimeout(() => setToast(null), 4000);
+          // Título del navegador
+          document.title = `💬 Nuevo mensaje — Intranet Copikon`;
+          setTimeout(() => { document.title = "Intranet Copikon"; }, 5000);
+        }
+        if (event === "channel_message" && data.from !== me.username) {
+          setUnreadChannels(u => ({ ...u, [data.channelId]: (u[data.channelId]||0)+1 }));
+          setToast({ msg: data.text?.slice(0,60) || "Nuevo mensaje", from: `#${data.channelId}`, color: "#2bbfae", section: "channels" });
+          setTimeout(() => setToast(null), 4000);
+          document.title = `💬 Mensaje en canal — Intranet Copikon`;
+          setTimeout(() => { document.title = "Intranet Copikon"; }, 5000);
+        }
+        if (event === "task_assigned") {
+          setToast({ msg: `Nueva tarea: ${data.task?.title?.slice(0,40)}`, from: data.projectName || "Proyectos", color: "#dd6874", section: "projects" });
+          setTimeout(() => setToast(null), 5000);
+        }
+      } catch {}
+    };
     // Poll unread count
     const poll = setInterval(() => {
       fetch(`${API_BASE}/api/intranet/chat/unread/${me.username}`).then(r=>r.json()).then((u:Record<string,number>) => {
         setTotalUnread(Object.values(u).reduce((a,b)=>a+b,0));
       }).catch(()=>{});
     }, 8000);
-    return ()=>clearInterval(poll);
+    return () => { es.close(); clearInterval(poll); };
   }, [me]);
 
   if (!me) return <LoginScreen onLogin={(u)=>setMe(u)} />;
 
   const gerColor = GER_COLORS[me.gerencia] || "#888";
 
+  const totalUnreadChannels = Object.values(unreadChannels).reduce((a,b)=>a+b,0);
   const NAV = [
     { id:"direct",   icon:"💬", label:"Mensajes",  badge: totalUnread },
-    { id:"channels", icon:"#",  label:"Canales",   badge: 0 },
+    { id:"channels", icon:"#",  label:"Canales",   badge: totalUnreadChannels },
     { id:"projects", icon:"📋", label:"Proyectos", badge: 0 },
   ];
+  // Limpiar unread del canal al entrar
+  const handleSetSection = (s: string) => {
+    setSection(s as any);
+    if (s === "channels") setUnreadChannels({});
+    if (s === "direct") setTotalUnread(0);
+  };
 
   return (
     <div style={{ display:"flex", height:"100vh", overflow:"hidden", fontFamily:"system-ui,sans-serif", background:"var(--background)", color:"var(--foreground)" }}>
@@ -859,7 +896,7 @@ export default function App() {
           <img src="./copikon-logo.jpg" style={{ width:36, height:36, borderRadius:8, objectFit:"cover" }} alt="Copikon" />
         </div>
         {NAV.map(n=>(
-          <button key={n.id} onClick={()=>setSection(n.id as any)} title={n.label}
+          <button key={n.id} onClick={()=>handleSetSection(n.id)} title={n.label}
             className={section===n.id ? 'nav-btn nav-btn-active' : 'nav-btn'}
             style={{ position:"relative", width:44, height:44, borderRadius:12, border:"none", cursor:"pointer",
               background: section===n.id ? "rgba(255,255,255,0.15)" : "transparent",
@@ -906,6 +943,24 @@ export default function App() {
           {section==="projects" && <ProjectManager me={me} users={users} />}
         </div>
       </div>
+
+      {/* Toast de notificación */}
+      {toast && (
+        <div onClick={()=>{ handleSetSection(toast.section); setToast(null); }}
+          style={{ position:"fixed", bottom:20, right:20, zIndex:9999,
+            background:"#1a2238", color:"#fff", borderRadius:14, padding:"12px 16px",
+            maxWidth:320, boxShadow:"0 8px 30px rgba(0,0,0,0.4)", cursor:"pointer",
+            display:"flex", alignItems:"flex-start", gap:10, animation:"slideIn .25s ease" }}>
+          <div style={{ width:36, height:36, borderRadius:10, background:toast.color, display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0 }}>
+            {toast.section==="direct"?"💬":toast.section==="channels"?"#":"📋"}
+          </div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.6)", marginBottom:2 }}>{toast.from}</div>
+            <div style={{ fontSize:13, lineHeight:1.4, overflow:"hidden", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" as any }}>{toast.msg}</div>
+          </div>
+          <button onClick={e=>{e.stopPropagation();setToast(null);}} style={{ background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:16,lineHeight:1,padding:0,flexShrink:0 }}>&times;</button>
+        </div>
+      )}
 
       {/* CSS helpers */}
       <style>{`
