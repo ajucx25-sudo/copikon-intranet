@@ -434,442 +434,740 @@ function ChatPanel({ me, users, tab }: { me: User; users: User[]; tab: "direct"|
 }
 
 // ══════════════════════════════════════════════════════════════════
-// PROJECT MANAGER
+// PROJECT MANAGER — rediseño estilo ProjectManager.com
 // ══════════════════════════════════════════════════════════════════
+
+/* ── Estilos PM inyectados ── */
+const PM_STYLES = `
+.pm-root { display:flex; height:100%; overflow:hidden; background:#f4f5f7; font-family:inherit; }
+
+/* Sidebar de proyectos */
+.pm-sidebar { width:230px; background:#1c2b36; display:flex; flex-direction:column; overflow-y:auto; flex-shrink:0; }
+.pm-sidebar-logo { padding:16px 16px 10px; display:flex; align-items:center; gap:9px; border-bottom:1px solid rgba(255,255,255,.08); }
+.pm-sidebar-logo-icon { width:32px; height:32px; border-radius:50%; background:#00b8b0; display:flex; align-items:center; justify-content:center; font-weight:900; font-size:13px; color:#fff; flex-shrink:0; }
+.pm-sidebar-logo-text { color:#fff; font-weight:700; font-size:13px; }
+.pm-sidebar-section { padding:16px 14px 6px; font-size:10px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:rgba(255,255,255,.4); }
+.pm-sidebar-item { display:flex; align-items:center; gap:10px; padding:8px 14px; cursor:pointer; color:rgba(255,255,255,.75); font-size:13px; border-radius:0; transition:background .12s; }
+.pm-sidebar-item:hover { background:rgba(255,255,255,.07); }
+.pm-sidebar-item.active { background:rgba(0,184,176,.18); color:#00b8b0; font-weight:600; border-left:3px solid #00b8b0; }
+.pm-sidebar-item-icon { width:20px; text-align:center; font-size:14px; flex-shrink:0; }
+.pm-sidebar-item-badge { margin-left:auto; background:rgba(255,255,255,.15); border-radius:10px; padding:1px 7px; font-size:10px; color:rgba(255,255,255,.6); }
+.pm-sidebar-proj-dot { width:10px; height:10px; border-radius:3px; flex-shrink:0; }
+.pm-sidebar-footer { margin-top:auto; padding:12px 14px; border-top:1px solid rgba(255,255,255,.08); display:flex; align-items:center; gap:9px; color:rgba(255,255,255,.65); font-size:12px; }
+
+/* Área principal */
+.pm-main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+
+/* Header del proyecto */
+.pm-header { background:#fff; border-bottom:1px solid #e2e5ea; padding:0 20px; display:flex; align-items:center; gap:0; flex-shrink:0; height:48px; }
+.pm-header-title { font-weight:700; font-size:15px; color:#1c2b36; margin-right:12px; }
+.pm-header-avatar { width:28px; height:28px; border-radius:50%; background:#00b8b0; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; color:#fff; margin-right:12px; flex-shrink:0; }
+.pm-view-tabs { display:flex; gap:0; }
+.pm-view-tab { padding:0 14px; height:48px; display:flex; align-items:center; font-size:12px; color:#6b7a99; cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; transition:color .12s; }
+.pm-view-tab:hover { color:#1c2b36; }
+.pm-view-tab.active { color:#00b8b0; border-bottom-color:#00b8b0; font-weight:600; }
+.pm-header-actions { margin-left:auto; display:flex; align-items:center; gap:8px; }
+.pm-btn-primary { padding:6px 14px; border-radius:6px; border:none; background:#00b8b0; color:#fff; font-weight:600; font-size:12px; cursor:pointer; transition:background .12s; white-space:nowrap; }
+.pm-btn-primary:hover { background:#009990; }
+.pm-btn-ghost { padding:6px 10px; border-radius:6px; border:1.5px solid #e2e5ea; background:transparent; color:#6b7a99; font-size:12px; cursor:pointer; }
+.pm-btn-ghost:hover { background:#f4f5f7; }
+.pm-btn-danger { padding:6px 10px; border-radius:6px; border:1.5px solid #ef4444; background:transparent; color:#ef4444; font-size:12px; cursor:pointer; }
+
+/* Vista lista */
+.pm-list-wrap { flex:1; overflow-y:auto; background:#fff; }
+.pm-list-table { width:100%; border-collapse:collapse; }
+.pm-list-th { padding:10px 14px; text-align:left; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#9aa3ae; border-bottom:1.5px solid #e2e5ea; background:#fff; position:sticky; top:0; white-space:nowrap; }
+.pm-list-tr { border-bottom:1px solid #f0f1f3; transition:background .1s; cursor:pointer; }
+.pm-list-tr:hover { background:#f8f9fb; }
+.pm-list-td { padding:10px 14px; font-size:13px; color:#2d3748; vertical-align:middle; }
+.pm-list-check { width:18px; height:18px; border:1.5px solid #c8cfd8; border-radius:4px; cursor:pointer; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; }
+.pm-list-check.done { background:#00b8b0; border-color:#00b8b0; color:#fff; font-size:11px; }
+.pm-list-task-name { font-size:13px; color:#1c2b36; font-weight:500; }
+.pm-list-task-name.done { text-decoration:line-through; color:#9aa3ae; }
+.pm-add-row td { padding:8px 14px; }
+.pm-add-input { border:none; outline:none; font-size:13px; color:#9aa3ae; width:100%; background:transparent; font-family:inherit; }
+.pm-add-input::placeholder { color:#b0b8c4; }
+.pm-status-pill { display:inline-block; padding:3px 9px; border-radius:4px; font-size:11px; font-weight:600; }
+.pm-priority-flag { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:600; }
+
+/* Vista kanban */
+.pm-kanban-wrap { flex:1; overflow-x:auto; overflow-y:hidden; padding:16px; display:flex; gap:14px; align-items:flex-start; background:#f4f5f7; }
+.pm-kanban-col { width:260px; flex-shrink:0; display:flex; flex-direction:column; }
+.pm-kanban-col-header { display:flex; align-items:center; gap:8px; padding:8px 4px; margin-bottom:8px; }
+.pm-kanban-col-title { font-size:13px; font-weight:700; color:#1c2b36; }
+.pm-kanban-col-count { background:#e2e5ea; border-radius:10px; padding:1px 8px; font-size:11px; color:#6b7a99; font-weight:600; }
+.pm-kanban-col-menu { margin-left:auto; color:#b0b8c4; cursor:pointer; font-size:16px; }
+.pm-kanban-cards { flex:1; overflow-y:auto; min-height:60px; }
+.pm-kanban-card { background:#fff; border-radius:8px; padding:12px 13px; margin-bottom:8px; cursor:pointer; border:1px solid #e8ecf0; transition:box-shadow .15s, transform .1s; }
+.pm-kanban-card:hover { box-shadow:0 3px 12px rgba(0,0,0,.09); transform:translateY(-1px); }
+.pm-kanban-card-title { font-size:13px; font-weight:500; color:#1c2b36; margin-bottom:8px; line-height:1.4; }
+.pm-kanban-card-footer { display:flex; align-items:center; justify-content:space-between; }
+.pm-kanban-add { display:flex; align-items:center; gap:6px; padding:8px 4px; color:#9aa3ae; font-size:12.5px; cursor:pointer; border-radius:6px; transition:color .12s; }
+.pm-kanban-add:hover { color:#00b8b0; }
+
+/* Panel de detalle de tarea */
+.pm-detail-overlay { position:absolute; inset:0; z-index:500; display:flex; }
+.pm-detail-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.18); }
+.pm-detail-panel { position:absolute; right:0; top:0; bottom:0; width:560px; max-width:90%; background:#fff; display:flex; flex-direction:column; box-shadow:-4px 0 24px rgba(0,0,0,.12); z-index:1; }
+.pm-detail-header { padding:14px 18px; border-bottom:1px solid #e8ecf0; display:flex; align-items:center; gap:10px; flex-shrink:0; }
+.pm-detail-breadcrumb { font-size:11px; color:#9aa3ae; }
+.pm-detail-header-actions { margin-left:auto; display:flex; align-items:center; gap:8px; }
+.pm-detail-body { display:flex; flex:1; overflow:hidden; }
+.pm-detail-main { flex:1; overflow-y:auto; padding:18px 20px; }
+.pm-detail-title { font-size:18px; font-weight:700; color:#1c2b36; margin-bottom:14px; line-height:1.3; }
+.pm-detail-meta { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
+.pm-detail-chip { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; font-size:11.5px; background:#f4f5f7; color:#4a5568; border:1px solid #e2e5ea; cursor:pointer; }
+.pm-detail-chip:hover { background:#edf2f7; }
+.pm-detail-section-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#9aa3ae; margin-bottom:8px; }
+.pm-detail-desc { font-size:13px; color:#4a5568; line-height:1.6; }
+.pm-detail-comments { width:200px; flex-shrink:0; background:#f8f9fb; border-left:1px solid #e8ecf0; display:flex; flex-direction:column; padding:14px 14px 10px; }
+.pm-detail-comment-list { flex:1; overflow-y:auto; }
+.pm-detail-comment-item { margin-bottom:12px; }
+.pm-detail-comment-meta { font-size:10.5px; font-weight:600; color:#4a5568; margin-bottom:2px; }
+.pm-detail-comment-text { font-size:12px; color:#2d3748; line-height:1.45; }
+.pm-detail-comment-input { display:flex; gap:6px; margin-top:8px; border-top:1px solid #e8ecf0; padding-top:10px; }
+.pm-detail-input { flex:1; border:1.5px solid #e2e5ea; border-radius:6px; padding:6px 9px; font-size:12px; outline:none; font-family:inherit; resize:none; background:#fff; }
+.pm-detail-input:focus { border-color:#00b8b0; }
+
+/* Modal nuevo proyecto/tarea */
+.pm-modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:9000; display:flex; align-items:center; justify-content:center; }
+.pm-modal { background:#fff; border-radius:12px; padding:24px; width:100%; max-width:440px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.25); }
+.pm-modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+.pm-modal-title { font-size:16px; font-weight:700; color:#1c2b36; }
+.pm-modal-close { background:none; border:none; font-size:22px; cursor:pointer; color:#9aa3ae; line-height:1; }
+.pm-field { margin-bottom:14px; }
+.pm-field label { display:block; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#9aa3ae; margin-bottom:5px; }
+.pm-inp { width:100%; padding:8px 11px; border-radius:7px; border:1.5px solid #e2e5ea; font-size:13px; font-family:inherit; outline:none; box-sizing:border-box; background:#fff; color:#1c2b36; }
+.pm-inp:focus { border-color:#00b8b0; }
+
+/* Mis tareas */
+.pm-mytasks { flex:1; overflow-y:auto; padding:24px; background:#f4f5f7; }
+.pm-mytask-row { background:#fff; border:1px solid #e8ecf0; border-radius:9px; padding:12px 16px; margin-bottom:8px; cursor:pointer; display:flex; align-items:center; gap:12px; transition:box-shadow .12s; }
+.pm-mytask-row:hover { box-shadow:0 2px 10px rgba(0,0,0,.07); }
+
+/* Lista de proyectos (portada) */
+.pm-projlist { flex:1; overflow-y:auto; padding:24px; background:#f4f5f7; }
+.pm-projlist-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+.pm-projlist-title { font-size:18px; font-weight:700; color:#1c2b36; }
+.pm-projlist-table { background:#fff; border-radius:10px; overflow:hidden; border:1px solid #e2e5ea; }
+.pm-projlist-th { padding:11px 18px; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#9aa3ae; background:#fafbfc; border-bottom:1.5px solid #e2e5ea; }
+.pm-projlist-tr { border-bottom:1px solid #f0f2f4; cursor:pointer; transition:background .1s; }
+.pm-projlist-tr:hover { background:#f8f9fb; }
+.pm-projlist-tr:last-child { border-bottom:none; }
+.pm-projlist-td { padding:13px 18px; font-size:13px; color:#2d3748; vertical-align:middle; }
+.pm-progress-bar { height:6px; border-radius:3px; background:#e8ecf0; overflow:hidden; width:120px; }
+.pm-progress-fill { height:100%; border-radius:3px; background:#00b8b0; transition:width .3s; }
+`;
+
+function PMStyles() {
+  return <style>{PM_STYLES}</style>;
+}
+
+function PMStatusPill({ status }: { status: string }) {
+  const cfg = STATUS_COLS.find(s => s.id === status);
+  const bg = (cfg?.color || "#888") + "20";
+  return (
+    <span className="pm-status-pill" style={{ background: bg, color: cfg?.color || "#888" }}>
+      {cfg?.label || status}
+    </span>
+  );
+}
+
+function PMPriorityFlag({ priority }: { priority: string }) {
+  const cfg = PRIORITY_CFG[priority];
+  if (!priority || priority === "ninguno") return <span style={{ fontSize: 11, color: "#b0b8c4" }}>—</span>;
+  return (
+    <span className="pm-priority-flag" style={{ color: cfg?.color || "#888" }}>
+      <span style={{ fontSize: 13 }}>⚑</span> {cfg?.label || priority}
+    </span>
+  );
+}
+
+function PMAvatar({ user, size = 28 }: { user: User | undefined; size?: number }) {
+  const g = user?.gerencia || "general";
+  const bg = GER_COLORS[g] || "#00b8b0";
+  return (
+    <div style={{ width: size, height: size, borderRadius: "50%", background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.38, fontWeight: 800, color: "#fff", flexShrink: 0 }}>
+      {initials(user?.nombre || user?.username || "?")}
+    </div>
+  );
+}
+
 function ProjectManager({ me, users }: { me: User; users: User[] }) {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [selectedProj, setSelectedProj] = useState<Project|null>(null);
+  const [selectedProj, setSelectedProj] = useState<Project | null>(null);
+  const [view, setView] = useState<"list" | "board">("list");
   const [showNewProj, setShowNewProj] = useState(false);
   const [showNewTask, setShowNewTask] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<Task|null>(null);
-  const [view, setView] = useState<"board"|"list">("board");
-  const [dragTask, setDragTask] = useState<{task:Task;projId:string}|null>(null);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [section, setSection] = useState<"projects" | "mytasks">("projects");
+  const [dragTask, setDragTask] = useState<{ task: Task; projId: string } | null>(null);
+  const [inlineTask, setInlineTask] = useState("");
 
   // New project form
-  const [npName, setNpName] = useState(""); const [npDesc, setNpDesc] = useState(""); const [npColor, setNpColor] = useState("#4a7fd4");
+  const [npName, setNpName] = useState(""); const [npDesc, setNpDesc] = useState(""); const [npColor, setNpColor] = useState("#00b8b0");
   // New task form
   const [ntTitle, setNtTitle] = useState(""); const [ntDesc, setNtDesc] = useState("");
   const [ntAssignee, setNtAssignee] = useState(""); const [ntPriority, setNtPriority] = useState("media");
   const [ntDue, setNtDue] = useState(""); const [ntStatus, setNtStatus] = useState("pendiente");
 
-  // ID local para proyectos/tareas creados offline
   function localId() { return "local_" + Date.now().toString(36); }
 
   const loadProjects = useCallback(async () => {
     try {
-      const data = await fetch(`${API_BASE}/api/intranet/projects`).then(r=>r.ok?r.json():Promise.reject()).catch(()=>null);
+      const data = await fetch(`${API_BASE}/api/intranet/projects`).then(r => r.ok ? r.json() : Promise.reject()).catch(() => null);
       if (data && Array.isArray(data)) {
         setProjects(data);
-        if (selectedProj) setSelectedProj(data.find((p:Project)=>p.id===selectedProj.id)||null);
-        return;
+        if (selectedProj) setSelectedProj(data.find((p: Project) => p.id === selectedProj.id) || null);
       }
     } catch {}
-    // Si el servidor falla, mantener el estado actual
   }, [selectedProj]);
 
   useEffect(() => { loadProjects(); }, []);
 
-  // SSE para updates en tiempo real
   useEffect(() => {
     const es = new EventSource(`${API_BASE}/api/intranet/sse/${me.username}`);
     es.onmessage = (e) => {
-      try {
-        const { event } = JSON.parse(e.data);
-        if (["task_assigned","task_updated"].includes(event)) loadProjects();
-      } catch {}
+      try { const { event } = JSON.parse(e.data); if (["task_assigned", "task_updated"].includes(event)) loadProjects(); } catch {}
     };
     return () => es.close();
   }, [me.username, loadProjects]);
 
   async function createProject() {
     if (!npName.trim()) return;
-    // Crear inmediatamente en memoria
-    const newProj: Project = { id: localId(), name: npName.trim(), desc: npDesc, color: npColor,
-      owner: me.username, members: [], tasks: [], createdAt: Date.now() };
+    const newProj: Project = { id: localId(), name: npName.trim(), desc: npDesc, color: npColor, owner: me.username, members: [], tasks: [], createdAt: Date.now() };
     setProjects(prev => [...prev, newProj]);
-    setNpName(""); setNpDesc(""); setNpColor("#4a7fd4"); setShowNewProj(false);
-    // Sincronizar con servidor en background
-    fetch(`${API_BASE}/api/intranet/projects`, { method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ name:newProj.name, desc:newProj.desc, color:newProj.color, owner:me.username, members:[] }) })
-      .then(r=>r.ok?r.json():null).then(p=>{ if(p) setProjects(prev=>prev.map(x=>x.id===newProj.id?p:x)); }).catch(()=>{});
+    setNpName(""); setNpDesc(""); setNpColor("#00b8b0"); setShowNewProj(false);
+    fetch(`${API_BASE}/api/intranet/projects`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newProj.name, desc: newProj.desc, color: newProj.color, owner: me.username, members: [] }) })
+      .then(r => r.ok ? r.json() : null).then(p => { if (p) setProjects(prev => prev.map(x => x.id === newProj.id ? p : x)); }).catch(() => {});
   }
 
   async function createTask() {
     if (!ntTitle.trim() || !selectedProj) return;
-    const newTask: Task = { id: localId(), title: ntTitle.trim(), desc: ntDesc,
-      assignee: ntAssignee||null, priority: ntPriority, dueDate: ntDue||null,
-      status: ntStatus, createdAt: Date.now(), comments: [] };
-    // Agregar tarea en memoria
-    setProjects(prev => prev.map(p => p.id===selectedProj.id
-      ? {...p, tasks:[...(p.tasks||[]), newTask]} : p));
-    setSelectedProj(prev => prev ? {...prev, tasks:[...(prev.tasks||[]), newTask]} : prev);
-    setNtTitle(""); setNtDesc(""); setNtAssignee(""); setNtPriority("media"); setNtDue(""); setNtStatus("pendiente");
-    setShowNewTask(false);
-    // Sincronizar con servidor
-    fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ title:newTask.title, desc:newTask.desc, assignee:newTask.assignee, priority:newTask.priority, dueDate:newTask.dueDate, status:newTask.status }) })
-      .then(r=>r.ok?r.json():null).then(t=>{ if(t) { setProjects(prev=>prev.map(p=>p.id===selectedProj.id?{...p,tasks:(p.tasks||[]).map(x=>x.id===newTask.id?t:x)}:p)); } }).catch(()=>{});
+    const newTask: Task = { id: localId(), title: ntTitle.trim(), desc: ntDesc, assignee: ntAssignee || null, priority: ntPriority, dueDate: ntDue || null, status: ntStatus, createdAt: Date.now(), comments: [] };
+    setProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: [...(p.tasks || []), newTask] } : p));
+    setSelectedProj(prev => prev ? { ...prev, tasks: [...(prev.tasks || []), newTask] } : prev);
+    setNtTitle(""); setNtDesc(""); setNtAssignee(""); setNtPriority("media"); setNtDue(""); setNtStatus("pendiente"); setShowNewTask(false);
+    fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: newTask.title, desc: newTask.desc, assignee: newTask.assignee, priority: newTask.priority, dueDate: newTask.dueDate, status: newTask.status }) })
+      .then(r => r.ok ? r.json() : null).then(t => { if (t) { setProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: (p.tasks || []).map(x => x.id === newTask.id ? t : x) } : p)); } }).catch(() => {});
+  }
+
+  async function createInlineTask(status: string) {
+    if (!inlineTask.trim() || !selectedProj) return;
+    const title = inlineTask.trim();
+    setInlineTask("");
+    const newTask: Task = { id: localId(), title, desc: "", assignee: null, priority: "media", dueDate: null, status, createdAt: Date.now(), comments: [] };
+    setProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: [...(p.tasks || []), newTask] } : p));
+    setSelectedProj(prev => prev ? { ...prev, tasks: [...(prev.tasks || []), newTask] } : prev);
+    fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, status }) })
+      .then(r => r.ok ? r.json() : null).then(t => { if (t) { setProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: (p.tasks || []).map(x => x.id === newTask.id ? t : x) } : p)); } }).catch(() => {});
   }
 
   async function moveTask(taskId: string, projId: string, newStatus: string) {
-    // Actualizar en memoria inmediatamente
-    setProjects(prev => prev.map(p => p.id===projId
-      ? {...p, tasks:(p.tasks||[]).map(t=>t.id===taskId?{...t,status:newStatus}:t)} : p));
-    if (selectedProj?.id===projId) setSelectedProj(prev => prev ? {...prev, tasks:(prev.tasks||[]).map(t=>t.id===taskId?{...t,status:newStatus}:t)} : prev);
-    // Sincronizar con servidor
-    fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method:"PUT", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ status:newStatus }) }).catch(()=>{});
+    setProjects(prev => prev.map(p => p.id === projId ? { ...p, tasks: (p.tasks || []).map(t => t.id === taskId ? { ...t, status: newStatus } : t) } : p));
+    if (selectedProj?.id === projId) setSelectedProj(prev => prev ? { ...prev, tasks: (prev.tasks || []).map(t => t.id === taskId ? { ...t, status: newStatus } : t) } : prev);
+    fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: newStatus }) }).catch(() => {});
+  }
+
+  async function toggleDone(taskId: string, projId: string, current: string) {
+    const newStatus = current === "completado" ? "pendiente" : "completado";
+    moveTask(taskId, projId, newStatus);
   }
 
   async function deleteTask(taskId: string, projId: string) {
     if (!confirm("¿Eliminar esta tarea?")) return;
-    setProjects(prev => prev.map(p => p.id===projId?{...p,tasks:(p.tasks||[]).filter(t=>t.id!==taskId)}:p));
-    if (selectedProj?.id===projId) setSelectedProj(prev=>prev?{...prev,tasks:(prev.tasks||[]).filter(t=>t.id!==taskId)}:prev);
+    setProjects(prev => prev.map(p => p.id === projId ? { ...p, tasks: (p.tasks || []).filter(t => t.id !== taskId) } : p));
+    if (selectedProj?.id === projId) setSelectedProj(prev => prev ? { ...prev, tasks: (prev.tasks || []).filter(t => t.id !== taskId) } : prev);
     setSelectedTask(null);
-    fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method:"DELETE" }).catch(()=>{});
+    fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method: "DELETE" }).catch(() => {});
   }
 
   async function deleteProject(projId: string) {
     if (!confirm("¿Eliminar este proyecto y todas sus tareas?")) return;
-    setProjects(prev => prev.filter(p=>p.id!==projId));
-    setSelectedProj(null);
-    fetch(`${API_BASE}/api/intranet/projects/${projId}`, { method:"DELETE" }).catch(()=>{});
+    setProjects(prev => prev.filter(p => p.id !== projId));
+    setSelectedProj(null); setSection("projects");
+    fetch(`${API_BASE}/api/intranet/projects/${projId}`, { method: "DELETE" }).catch(() => {});
   }
 
   const proj = selectedProj;
   const tasks = proj?.tasks || [];
-  const myTasks = projects.flatMap(p => (p.tasks||[]).filter(t=>t.assignee===me.username).map(t=>({...t,projName:p.name,projColor:p.color,projId:p.id})));
+  const myTasks = projects.flatMap(p => (p.tasks || []).filter(t => t.assignee === me.username).map(t => ({ ...t, projName: p.name, projColor: p.color, projId: p.id })));
+  const totalDone = tasks.filter(t => t.status === "completado").length;
+  const progress = tasks.length ? Math.round((totalDone / tasks.length) * 100) : 0;
 
   return (
-    <div style={{ display:"flex", height:"100%", overflow:"hidden" }}>
-      {/* Sidebar proyectos */}
-      <div className="proj-sidebar" style={{ width:220, display:"flex", flexDirection:"column", overflowY:"auto", flexShrink:0 }}>
-        <div style={{ padding:"12px 14px 4px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <span style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:".06em", color:"var(--muted-foreground)" }}>Proyectos</span>
-          {(me.role==="admin"||me.role==="editor") && (
-            <button onClick={()=>setShowNewProj(true)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--muted-foreground)", fontSize:18, lineHeight:1, padding:2 }}>+</button>
-          )}
+    <div className="pm-root">
+      <PMStyles />
+
+      {/* ── Sidebar ── */}
+      <div className="pm-sidebar">
+        <div className="pm-sidebar-logo">
+          <div className="pm-sidebar-logo-icon">PM</div>
+          <span className="pm-sidebar-logo-text">Proyectos</span>
         </div>
 
-        {/* Mis tareas */}
-        <div onClick={()=>setSelectedProj(null)}
-          style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 14px", cursor:"pointer",
-            background:!selectedProj?"var(--accent)":"transparent", borderRadius:8, margin:"2px 6px" }}>
-          <div style={{ width:28, height:28, borderRadius:8, background:"#6b7a99", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13 }}>📋</div>
-          <div>
-            <div style={{ fontSize:12.5, fontWeight:600 }}>Mis tareas</div>
-            <div style={{ fontSize:10, color:"var(--muted-foreground)" }}>{myTasks.filter(t=>t.status!=="completado").length} pendientes</div>
-          </div>
+        <div className="pm-sidebar-section">Principal</div>
+        <div className={`pm-sidebar-item ${section === "mytasks" && !selectedProj ? "active" : ""}`}
+          onClick={() => { setSection("mytasks"); setSelectedProj(null); }}>
+          <span className="pm-sidebar-item-icon">☑️</span>
+          <span>Mis tareas</span>
+          {myTasks.filter(t => t.status !== "completado").length > 0 &&
+            <span className="pm-sidebar-item-badge">{myTasks.filter(t => t.status !== "completado").length}</span>}
         </div>
 
-        <div style={{ padding:"6px 14px 4px", fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:".06em", color:"var(--muted-foreground)", marginTop:4 }}>Todos los proyectos</div>
-        {projects.map(p => (
-          <div key={p.id} onClick={()=>setSelectedProj(p)}
-            style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 14px", cursor:"pointer",
-              background:selectedProj?.id===p.id?"var(--accent)":"transparent", borderRadius:8, margin:"2px 6px" }}>
-            <div style={{ width:28, height:28, borderRadius:8, background:p.color, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontSize:11, fontWeight:700, flexShrink:0 }}>
-              {p.name.slice(0,2).toUpperCase()}
+        <div className="pm-sidebar-section" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingRight: 10 }}>
+          <span>Portafolio</span>
+          {(me.role === "admin" || me.role === "editor") &&
+            <span onClick={() => setShowNewProj(true)} style={{ cursor: "pointer", color: "rgba(255,255,255,.5)", fontSize: 16, fontWeight: 300, lineHeight: 1 }}>+</span>}
+        </div>
+
+        {projects.map(p => {
+          const pDone = (p.tasks || []).filter(t => t.status === "completado").length;
+          const pTotal = (p.tasks || []).length;
+          return (
+            <div key={p.id} className={`pm-sidebar-item ${selectedProj?.id === p.id ? "active" : ""}`}
+              onClick={() => { setSelectedProj(p); setSection("projects"); }}>
+              <div className="pm-sidebar-proj-dot" style={{ background: p.color }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: 12.5 }}>{p.name}</div>
+              </div>
+              <span className="pm-sidebar-item-badge">{pTotal}</span>
             </div>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:12.5, fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{p.name}</div>
-              <div style={{ fontSize:10, color:"var(--muted-foreground)" }}>{(p.tasks||[]).length} tareas</div>
-            </div>
+          );
+        })}
+
+        {projects.length === 0 && (
+          <div style={{ padding: "12px 16px", fontSize: 11.5, color: "rgba(255,255,255,.3)", lineHeight: 1.5 }}>
+            Sin proyectos aún.{(me.role === "admin" || me.role === "editor") && <><br />Usa + para crear uno.</>}
           </div>
-        ))}
+        )}
+
+        <div className="pm-sidebar-footer">
+          <PMAvatar user={users.find(u => u.username === me.username) || { username: me.username, nombre: me.username, cargo: "", gerencia: "general", role: me.role, cargoId: "" }} size={28} />
+          <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{me.username}</span>
+        </div>
       </div>
 
-      {/* Contenido principal */}
-      <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
-        {!selectedProj ? (
-          // Vista "Mis tareas"
-          <div style={{ flex:1, overflow:"auto", padding:20 }}>
-            <div style={{ fontSize:18, fontWeight:800, marginBottom:16 }}>Mis tareas asignadas</div>
-            {myTasks.length === 0
-              ? <div style={{ color:"var(--muted-foreground)", fontSize:13 }}>No tienes tareas asignadas.</div>
-              : myTasks.map(t => (
-                <div key={t.id} onClick={()=>{setSelectedProj(projects.find(p=>p.id===t.projId)||null); setSelectedTask(t);}}
-                  style={{ background:"var(--card)", border:"1px solid var(--border)", borderRadius:10, padding:"12px 14px", marginBottom:8,
-                    cursor:"pointer", display:"flex", alignItems:"center", gap:12 }}>
-                  <div style={{ width:4, height:36, borderRadius:2, background:(t as any).projColor, flexShrink:0 }} />
-                  <div style={{ flex:1 }}>
-                    <div style={{ fontWeight:600, fontSize:13 }}>{t.title}</div>
-                    <div style={{ fontSize:11, color:"var(--muted-foreground)" }}>{(t as any).projName}</div>
-                  </div>
-                  <StatusBadge status={t.status} />
-                  <PriorityDot priority={t.priority} />
-                </div>
-              ))}
-          </div>
-        ) : (<>
-          {/* Header proyecto */}
-          <div style={{ padding:"12px 20px", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", gap:12, background:"var(--card)", flexShrink:0 }}>
-            <div style={{ width:36, height:36, borderRadius:10, background:proj?.color, display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:800, fontSize:14 }}>
-              {proj?.name.slice(0,2).toUpperCase()}
-            </div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontWeight:800, fontSize:16 }}>{proj?.name}</div>
-              {proj?.desc && <div style={{ fontSize:12, color:"var(--muted-foreground)" }}>{proj.desc}</div>}
-            </div>
-            <div style={{ display:"flex", gap:6 }}>
-              <button onClick={()=>setView("board")} style={{ padding:"5px 12px", borderRadius:8, border:"1.5px solid var(--border)", background:view==="board"?"var(--primary)":"transparent", color:view==="board"?"var(--primary-foreground)":"var(--foreground)", cursor:"pointer", fontSize:12, fontWeight:600 }}>Kanban</button>
-              <button onClick={()=>setView("list")} style={{ padding:"5px 12px", borderRadius:8, border:"1.5px solid var(--border)", background:view==="list"?"var(--primary)":"transparent", color:view==="list"?"var(--primary-foreground)":"var(--foreground)", cursor:"pointer", fontSize:12, fontWeight:600 }}>Lista</button>
-              {(me.role==="admin"||me.role==="editor") && <>
-                <button onClick={()=>setShowNewTask(true)} style={{ padding:"5px 14px", borderRadius:8, border:"none", background:proj?.color||"#4a7fd4", color:"#fff", cursor:"pointer", fontSize:12, fontWeight:700 }}>+ Tarea</button>
-                <button onClick={()=>deleteProject(proj!.id)} style={{ padding:"5px 10px", borderRadius:8, border:"1.5px solid #ef4444", background:"transparent", color:"#ef4444", cursor:"pointer", fontSize:12 }}>🗑</button>
-              </>}
-            </div>
-          </div>
+      {/* ── Área principal ── */}
+      <div className="pm-main" style={{ position: "relative" }}>
 
-          {/* Kanban / Lista */}
-          <div style={{ flex:1, overflow:"auto", padding:16 }}>
-            {view==="board" ? (
-              <div style={{ display:"flex", gap:14, height:"100%", alignItems:"flex-start" }}>
-                {STATUS_COLS.map(col => {
-                  const colTasks = tasks.filter(t=>t.status===col.id);
+        {/* Vista mis tareas */}
+        {section === "mytasks" && !selectedProj && (
+          <>
+            <div className="pm-header">
+              <span className="pm-header-title">☑️ Mis tareas</span>
+            </div>
+            <div className="pm-mytasks">
+              {myTasks.length === 0
+                ? <div style={{ color: "#9aa3ae", fontSize: 13, textAlign: "center", marginTop: 60 }}>No tienes tareas asignadas.</div>
+                : myTasks.map(t => {
+                  const done = t.status === "completado";
                   return (
-                    <div key={col.id}
-                      className="kanban-col"
-                      style={{ width:240, flexShrink:0, borderRadius:14, padding:10, minHeight:120 }}
-                      onDragOver={e=>e.preventDefault()}
-                      onDrop={()=>{ if(dragTask) moveTask(dragTask.task.id, dragTask.projId, col.id); setDragTask(null); }}>
-                      <div className="kanban-col-header" style={{ display:"flex", alignItems:"center", gap:6, marginBottom:10 }}>
-                        <div style={{ width:8, height:8, borderRadius:"50%", background:col.color }} />
-                        <span style={{ fontWeight:800, fontSize:11.5, letterSpacing:".05em" }}>{col.label}</span>
-                        <span style={{ marginLeft:"auto", background:"var(--border)", borderRadius:10, padding:"1px 7px", fontSize:11, color:"var(--muted-foreground)" }}>{colTasks.length}</span>
+                    <div key={t.id} className="pm-mytask-row"
+                      onClick={() => { setSelectedProj(projects.find(p => p.id === t.projId) || null); setSelectedTask(t); setSection("projects"); }}>
+                      <div style={{ width: 4, height: 36, borderRadius: 2, background: (t as any).projColor, flexShrink: 0 }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 500, fontSize: 13, color: done ? "#9aa3ae" : "#1c2b36", textDecoration: done ? "line-through" : "none" }}>{t.title}</div>
+                        <div style={{ fontSize: 11, color: "#9aa3ae" }}>{(t as any).projName}</div>
                       </div>
-                      {colTasks.map(t => (
-                        <TaskCard key={t.id} task={t} projId={proj!.id} users={users} me={me}
-                          onClick={()=>setSelectedTask(t)}
-                          onDragStart={()=>setDragTask({task:t,projId:proj!.id})}
-                          onMove={(newStatus)=>moveTask(t.id,proj!.id,newStatus)} />
-                      ))}
+                      <PMStatusPill status={t.status} />
+                      <PMPriorityFlag priority={t.priority} />
                     </div>
                   );
                 })}
+            </div>
+          </>
+        )}
+
+        {/* Vista lista de todos los proyectos */}
+        {section === "projects" && !selectedProj && (
+          <>
+            <div className="pm-header">
+              <span className="pm-header-title">📁 Todos los proyectos</span>
+              <div className="pm-header-actions">
+                {(me.role === "admin" || me.role === "editor") &&
+                  <button className="pm-btn-primary" onClick={() => setShowNewProj(true)}>+ Nuevo proyecto</button>}
               </div>
-            ) : (
-              <div>
+            </div>
+            <div className="pm-projlist">
+              {projects.length === 0
+                ? <div style={{ color: "#9aa3ae", fontSize: 13, textAlign: "center", marginTop: 60 }}>
+                    Sin proyectos.{(me.role === "admin" || me.role === "editor") && " Crea el primero con el botón de arriba."}
+                  </div>
+                : <div className="pm-projlist-table">
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr>
+                          <th className="pm-projlist-th">Nombre</th>
+                          <th className="pm-projlist-th">Progreso</th>
+                          <th className="pm-projlist-th">Gerente</th>
+                          <th className="pm-projlist-th">Tareas</th>
+                          <th className="pm-projlist-th">Estado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {projects.map(p => {
+                          const pDone = (p.tasks || []).filter(t => t.status === "completado").length;
+                          const pTotal = (p.tasks || []).length;
+                          const pProgress = pTotal ? Math.round((pDone / pTotal) * 100) : 0;
+                          const owner = users.find(u => u.username === p.owner);
+                          return (
+                            <tr key={p.id} className="pm-projlist-tr" onClick={() => { setSelectedProj(p); setView("list"); }}>
+                              <td className="pm-projlist-td">
+                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                  <div style={{ width: 10, height: 10, borderRadius: 3, background: p.color, flexShrink: 0 }} />
+                                  <span style={{ fontWeight: 600 }}>{p.name}</span>
+                                </div>
+                              </td>
+                              <td className="pm-projlist-td">
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <div className="pm-progress-bar"><div className="pm-progress-fill" style={{ width: pProgress + "%" }} /></div>
+                                  <span style={{ fontSize: 11, color: "#9aa3ae" }}>{pProgress}%</span>
+                                </div>
+                              </td>
+                              <td className="pm-projlist-td">
+                                {owner ? <div style={{ display: "flex", alignItems: "center", gap: 7 }}><PMAvatar user={owner} size={24} /><span style={{ fontSize: 12 }}>{owner.nombre || owner.username}</span></div>
+                                  : <span style={{ color: "#9aa3ae", fontSize: 12 }}>—</span>}
+                              </td>
+                              <td className="pm-projlist-td"><span style={{ fontSize: 12 }}>{pDone}/{pTotal}</span></td>
+                              <td className="pm-projlist-td">
+                                <span style={{ fontSize: 11, color: pProgress === 100 ? "#22c55e" : pProgress > 0 ? "#4a7fd4" : "#9aa3ae", fontWeight: 600 }}>
+                                  {pProgress === 100 ? "Completado" : pProgress > 0 ? "En progreso" : "Por iniciar"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>}
+            </div>
+          </>
+        )}
+
+        {/* Vista de proyecto seleccionado */}
+        {selectedProj && (
+          <>
+            {/* Header */}
+            <div className="pm-header">
+              <div className="pm-header-avatar" style={{ background: proj!.color }}>
+                {proj!.name.slice(0, 2).toUpperCase()}
+              </div>
+              <span className="pm-header-title">{proj!.name}</span>
+              <div className="pm-view-tabs">
+                <div className={`pm-view-tab ${view === "list" ? "active" : ""}`} onClick={() => setView("list")}>≡ Lista</div>
+                <div className={`pm-view-tab ${view === "board" ? "active" : ""}`} onClick={() => setView("board")}>⊞ Tablero</div>
+              </div>
+              <div className="pm-header-actions">
+                {/* Barra de progreso compacta */}
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <div className="pm-progress-bar" style={{ width: 80 }}><div className="pm-progress-fill" style={{ width: progress + "%" }} /></div>
+                  <span style={{ fontSize: 11, color: "#9aa3ae" }}>{progress}%</span>
+                </div>
+                {(me.role === "admin" || me.role === "editor") && <>
+                  <button className="pm-btn-primary" onClick={() => setShowNewTask(true)}>+ Tarea</button>
+                  <button className="pm-btn-danger" onClick={() => deleteProject(proj!.id)}>🗑</button>
+                </>}
+              </div>
+            </div>
+
+            {/* Vista Lista */}
+            {view === "list" && (
+              <div className="pm-list-wrap">
+                <table className="pm-list-table">
+                  <thead>
+                    <tr>
+                      <th className="pm-list-th" style={{ width: 36 }}></th>
+                      <th className="pm-list-th">Nombre de la tarea</th>
+                      <th className="pm-list-th">Encargado</th>
+                      <th className="pm-list-th">Estado</th>
+                      <th className="pm-list-th">Prioridad</th>
+                      <th className="pm-list-th">Pendiente</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tasks.map(t => {
+                      const assignee = users.find(u => u.username === t.assignee);
+                      const done = t.status === "completado";
+                      return (
+                        <tr key={t.id} className="pm-list-tr" onClick={() => setSelectedTask(t)}>
+                          <td className="pm-list-td" onClick={e => { e.stopPropagation(); toggleDone(t.id, proj!.id, t.status); }}>
+                            <div className={`pm-list-check ${done ? "done" : ""}`}>{done ? "✓" : ""}</div>
+                          </td>
+                          <td className="pm-list-td">
+                            <span className={`pm-list-task-name ${done ? "done" : ""}`}>{t.title}</span>
+                          </td>
+                          <td className="pm-list-td">
+                            {assignee
+                              ? <div style={{ display: "flex", alignItems: "center", gap: 7 }}><PMAvatar user={assignee} size={24} /><span style={{ fontSize: 12 }}>{assignee.nombre || assignee.username}</span></div>
+                              : <span style={{ color: "#b0b8c4", fontSize: 12 }}>—</span>}
+                          </td>
+                          <td className="pm-list-td"><PMStatusPill status={t.status} /></td>
+                          <td className="pm-list-td"><PMPriorityFlag priority={t.priority} /></td>
+                          <td className="pm-list-td"><span style={{ fontSize: 12, color: t.dueDate ? "#4a5568" : "#b0b8c4" }}>{t.dueDate || "—"}</span></td>
+                        </tr>
+                      );
+                    })}
+                    {tasks.length === 0 && (
+                      <tr><td colSpan={6} style={{ padding: "30px 14px", textAlign: "center", color: "#b0b8c4", fontSize: 13 }}>Sin tareas. Agrega la primera con "+ Tarea".</td></tr>
+                    )}
+                    {/* Fila inline add */}
+                    {(me.role === "admin" || me.role === "editor") && (
+                      <tr className="pm-add-row">
+                        <td><div className="pm-list-check" /></td>
+                        <td colSpan={5}>
+                          <input className="pm-add-input" placeholder="Introduzca un nuevo nombre de tarea"
+                            value={inlineTask} onChange={e => setInlineTask(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") createInlineTask("pendiente"); }} />
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Vista Kanban */}
+            {view === "board" && (
+              <div className="pm-kanban-wrap">
                 {STATUS_COLS.map(col => {
-                  const colTasks = tasks.filter(t=>t.status===col.id);
-                  if (!colTasks.length) return null;
+                  const colTasks = tasks.filter(t => t.status === col.id);
                   return (
-                    <div key={col.id} style={{ marginBottom:20 }}>
-                      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8 }}>
-                        <div style={{ width:8,height:8,borderRadius:"50%",background:col.color }} />
-                        <span style={{ fontWeight:700, fontSize:12 }}>{col.label} ({colTasks.length})</span>
+                    <div key={col.id} className="pm-kanban-col"
+                      onDragOver={e => e.preventDefault()}
+                      onDrop={() => { if (dragTask) moveTask(dragTask.task.id, dragTask.projId, col.id); setDragTask(null); }}>
+                      <div className="pm-kanban-col-header">
+                        <div style={{ width: 10, height: 10, borderRadius: "50%", background: col.color, flexShrink: 0 }} />
+                        <span className="pm-kanban-col-title">{col.label}</span>
+                        <span className="pm-kanban-col-count">{colTasks.length}</span>
+                        <span className="pm-kanban-col-menu">···</span>
                       </div>
-                      {colTasks.map(t=>(
-                        <TaskRow key={t.id} task={t} users={users} onClick={()=>setSelectedTask(t)} />
-                      ))}
+                      <div className="pm-kanban-cards">
+                        {colTasks.map(t => {
+                          const assignee = users.find(u => u.username === t.assignee);
+                          return (
+                            <div key={t.id} className="pm-kanban-card" draggable
+                              onDragStart={() => setDragTask({ task: t, projId: proj!.id })}
+                              onClick={() => setSelectedTask(t)}>
+                              <div className="pm-kanban-card-title">{t.title}</div>
+                              <div className="pm-kanban-card-footer">
+                                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                  {assignee && <PMAvatar user={assignee} size={22} />}
+                                  <PMPriorityFlag priority={t.priority} />
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  {t.dueDate && <span style={{ fontSize: 10.5, color: "#9aa3ae" }}>{t.dueDate}</span>}
+                                  {(t.comments?.length || 0) > 0 && <span style={{ fontSize: 10.5, color: "#9aa3ae" }}>💬 {t.comments.length}</span>}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {(me.role === "admin" || me.role === "editor") && (
+                        <div className="pm-kanban-add" onClick={() => { setNtStatus(col.id); setShowNewTask(true); }}>
+                          <span style={{ fontSize: 16, fontWeight: 300 }}>+</span> Agregar una tarea
+                        </div>
+                      )}
                     </div>
                   );
                 })}
               </div>
             )}
-          </div>
-        </>)}
-      </div>
 
-      {/* Modal nueva tarea */}
-      {showNewTask && (
-        <Modal onClose={()=>setShowNewTask(false)} title="Nueva tarea">
-          <Field label="Título"><input value={ntTitle} onChange={e=>setNtTitle(e.target.value)} className="inp" placeholder="Título de la tarea" /></Field>
-          <Field label="Descripción"><textarea value={ntDesc} onChange={e=>setNtDesc(e.target.value)} className="inp" rows={2} placeholder="Descripción opcional" style={{ resize:"vertical" }} /></Field>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <Field label="Asignar a">
-              <select value={ntAssignee} onChange={e=>setNtAssignee(e.target.value)} className="inp">
-                <option value="">Sin asignar</option>
-                {users.map(u=><option key={u.username} value={u.username}>{u.nombre||u.username} — {u.cargo}</option>)}
-              </select>
-            </Field>
-            <Field label="Prioridad">
-              <select value={ntPriority} onChange={e=>setNtPriority(e.target.value)} className="inp">
-                <option value="baja">Baja</option>
-                <option value="media">Media</option>
-                <option value="alta">Alta</option>
-              </select>
-            </Field>
-            <Field label="Estado inicial">
-              <select value={ntStatus} onChange={e=>setNtStatus(e.target.value)} className="inp">
-                {STATUS_COLS.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
-            </Field>
-            <Field label="Fecha límite"><input type="date" value={ntDue} onChange={e=>setNtDue(e.target.value)} className="inp" /></Field>
-          </div>
-          <button onClick={createTask} style={{ width:"100%", marginTop:14, padding:"10px", borderRadius:9, border:"none", background:"var(--primary)", color:"var(--primary-foreground)", fontWeight:700, cursor:"pointer", fontSize:13 }}>Crear tarea</button>
-        </Modal>
-      )}
+            {/* Panel de detalle de tarea */}
+            {selectedTask && proj && (
+              <PMTaskDetail
+                task={selectedTask} proj={proj} users={users} me={me}
+                onClose={() => setSelectedTask(null)}
+                onMove={(s) => { moveTask(selectedTask.id, proj.id, s); setSelectedTask({ ...selectedTask, status: s }); }}
+                onDelete={() => deleteTask(selectedTask.id, proj.id)}
+                onReload={loadProjects}
+              />
+            )}
+          </>
+        )}
+      </div>
 
       {/* Modal nuevo proyecto */}
       {showNewProj && (
-        <Modal onClose={()=>setShowNewProj(false)} title="Nuevo proyecto">
-          <Field label="Nombre"><input value={npName} onChange={e=>setNpName(e.target.value)} className="inp" placeholder="Nombre del proyecto" /></Field>
-          <Field label="Descripción"><input value={npDesc} onChange={e=>setNpDesc(e.target.value)} className="inp" placeholder="Descripción opcional" /></Field>
-          <Field label="Color">
-            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-              {["#4a7fd4","#3cb371","#e8a020","#dd6874","#a06ad4","#5b8ff9","#f0a050","#1a3a6b"].map(c=>(
-                <div key={c} onClick={()=>setNpColor(c)} style={{ width:28,height:28,borderRadius:8,background:c,cursor:"pointer", outline: npColor===c?"3px solid var(--foreground)":"none", outlineOffset:2 }} />
-              ))}
+        <div className="pm-modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowNewProj(false); }}>
+          <div className="pm-modal">
+            <div className="pm-modal-header">
+              <span className="pm-modal-title">Nuevo proyecto</span>
+              <button className="pm-modal-close" onClick={() => setShowNewProj(false)}>×</button>
             </div>
-          </Field>
-          <button onClick={createProject} style={{ width:"100%", marginTop:14, padding:"10px", borderRadius:9, border:"none", background:npColor, color:"#fff", fontWeight:700, cursor:"pointer", fontSize:13 }}>Crear proyecto</button>
-        </Modal>
-      )}
-
-      {/* Task detail modal */}
-      {selectedTask && proj && (
-        <TaskDetailModal task={selectedTask} proj={proj} users={users} me={me}
-          onClose={()=>setSelectedTask(null)}
-          onMove={(s)=>{moveTask(selectedTask.id,proj.id,s); setSelectedTask({...selectedTask,status:s});}}
-          onDelete={()=>deleteTask(selectedTask.id,proj.id)}
-          onReload={loadProjects} />
-      )}
-    </div>
-  );
-}
-
-// ── Small components ───────────────────────────────────────────────
-function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_COLS.find(s=>s.id===status);
-  return <span style={{ padding:"2px 8px", borderRadius:10, fontSize:10, fontWeight:700, background:cfg?.color+"22", color:cfg?.color }}>{cfg?.label||status}</span>;
-}
-function PriorityDot({ priority }: { priority: string }) {
-  const cfg = PRIORITY_CFG[priority];
-  return <div style={{ width:8,height:8,borderRadius:"50%",background:cfg?.color||"#888",flexShrink:0 }} title={cfg?.label} />;
-}
-function Field({ label, children }: { label:string; children:React.ReactNode }) {
-  return <div style={{ marginBottom:10 }}>
-    <label style={{ fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",color:"var(--muted-foreground)",display:"block",marginBottom:4 }}>{label}</label>
-    {children}
-  </div>;
-}
-function Modal({ onClose, title, children }: { onClose:()=>void; title:string; children:React.ReactNode }) {
-  return (
-    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center" }} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{ background:"var(--card)",borderRadius:16,padding:24,width:"100%",maxWidth:440,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 20px 60px rgba(0,0,0,.3)" }}>
-        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18 }}>
-          <div style={{ fontWeight:800,fontSize:16 }}>{title}</div>
-          <button onClick={onClose} style={{ background:"none",border:"none",fontSize:22,cursor:"pointer",color:"var(--muted-foreground)",lineHeight:1 }}>&times;</button>
+            <div className="pm-field"><label>Nombre</label><input className="pm-inp" value={npName} onChange={e => setNpName(e.target.value)} placeholder="Nombre del proyecto" /></div>
+            <div className="pm-field"><label>Descripción</label><input className="pm-inp" value={npDesc} onChange={e => setNpDesc(e.target.value)} placeholder="Descripción opcional" /></div>
+            <div className="pm-field">
+              <label>Color</label>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {["#00b8b0", "#4a7fd4", "#3cb371", "#e8a020", "#dd6874", "#a06ad4", "#5b8ff9", "#f0a050"].map(c => (
+                  <div key={c} onClick={() => setNpColor(c)} style={{ width: 28, height: 28, borderRadius: 7, background: c, cursor: "pointer", outline: npColor === c ? "3px solid #1c2b36" : "none", outlineOffset: 2 }} />
+                ))}
+              </div>
+            </div>
+            <button className="pm-btn-primary" style={{ width: "100%", marginTop: 4, padding: "10px", fontSize: 13, borderRadius: 8, background: npColor }} onClick={createProject}>Crear proyecto</button>
+          </div>
         </div>
-        {children}
-      </div>
+      )}
+
+      {/* Modal nueva tarea */}
+      {showNewTask && (
+        <div className="pm-modal-overlay" onClick={e => { if (e.target === e.currentTarget) setShowNewTask(false); }}>
+          <div className="pm-modal">
+            <div className="pm-modal-header">
+              <span className="pm-modal-title">Nueva tarea</span>
+              <button className="pm-modal-close" onClick={() => setShowNewTask(false)}>×</button>
+            </div>
+            <div className="pm-field"><label>Título</label><input className="pm-inp" value={ntTitle} onChange={e => setNtTitle(e.target.value)} placeholder="Título de la tarea" /></div>
+            <div className="pm-field"><label>Descripción</label><textarea className="pm-inp" value={ntDesc} onChange={e => setNtDesc(e.target.value)} rows={2} placeholder="Descripción opcional" style={{ resize: "vertical" }} /></div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div className="pm-field"><label>Asignar a</label>
+                <select className="pm-inp" value={ntAssignee} onChange={e => setNtAssignee(e.target.value)}>
+                  <option value="">Sin asignar</option>
+                  {users.map(u => <option key={u.username} value={u.username}>{u.nombre || u.username}</option>)}
+                </select>
+              </div>
+              <div className="pm-field"><label>Prioridad</label>
+                <select className="pm-inp" value={ntPriority} onChange={e => setNtPriority(e.target.value)}>
+                  <option value="baja">Baja</option>
+                  <option value="media">Media</option>
+                  <option value="alta">Alta</option>
+                </select>
+              </div>
+              <div className="pm-field"><label>Estado inicial</label>
+                <select className="pm-inp" value={ntStatus} onChange={e => setNtStatus(e.target.value)}>
+                  {STATUS_COLS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+              </div>
+              <div className="pm-field"><label>Fecha límite</label><input type="date" className="pm-inp" value={ntDue} onChange={e => setNtDue(e.target.value)} /></div>
+            </div>
+            <button className="pm-btn-primary" style={{ width: "100%", marginTop: 4, padding: "10px", fontSize: 13, borderRadius: 8 }} onClick={createTask}>Crear tarea</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function TaskCard({ task, projId, users, me, onClick, onDragStart, onMove }: any) {
-  const assignee = users.find((u:User)=>u.username===task.assignee);
-  return (
-    <div draggable onDragStart={onDragStart} onClick={onClick}
-      className="task-card"
-      style={{ padding:"10px 12px",marginBottom:8,
-        cursor:"pointer" }}>
-      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6,marginBottom:6 }}>
-        <div style={{ fontWeight:600,fontSize:13,lineHeight:1.35 }}>{task.title}</div>
-        <PriorityDot priority={task.priority} />
-      </div>
-      {task.desc && <div style={{ fontSize:11,color:"var(--muted-foreground)",marginBottom:6,lineHeight:1.4,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical" }}>{task.desc}</div>}
-      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4 }}>
-        {assignee ? <Avatar user={assignee} size={22} /> : <div />}
-        {task.dueDate && <div style={{ fontSize:10,color:"var(--muted-foreground)" }}>📅 {task.dueDate}</div>}
-        {task.comments?.length>0 && <div style={{ fontSize:10,color:"var(--muted-foreground)" }}>💬 {task.comments.length}</div>}
-      </div>
-    </div>
-  );
-}
-
-function TaskRow({ task, users, onClick }: { task:Task; users:User[]; onClick:()=>void }) {
-  const assignee = users.find(u=>u.username===task.assignee);
-  return (
-    <div onClick={onClick} style={{ display:"flex",alignItems:"center",gap:12,padding:"9px 12px",background:"var(--card)",border:"1px solid var(--border)",borderRadius:9,marginBottom:6,cursor:"pointer" }}>
-      <PriorityDot priority={task.priority} />
-      <div style={{ flex:1,fontWeight:500,fontSize:13 }}>{task.title}</div>
-      {assignee && <div style={{ display:"flex",alignItems:"center",gap:5 }}><Avatar user={assignee} size={22} /><span style={{ fontSize:11,color:"var(--muted-foreground)" }}>{assignee.nombre||assignee.username}</span></div>}
-      {task.dueDate && <div style={{ fontSize:11,color:"var(--muted-foreground)" }}>📅 {task.dueDate}</div>}
-      <StatusBadge status={task.status} />
-    </div>
-  );
-}
-
-function TaskDetailModal({ task, proj, users, me, onClose, onMove, onDelete, onReload }: any) {
+function PMTaskDetail({ task, proj, users, me, onClose, onMove, onDelete, onReload }: any) {
   const [comment, setComment] = useState("");
   const [localTask, setLocalTask] = useState<Task>(task);
-  const assignee = users.find((u:User)=>u.username===localTask.assignee);
+  const assignee = users.find((u: User) => u.username === localTask.assignee);
 
   async function addComment() {
     if (!comment.trim()) return;
     await fetch(`${API_BASE}/api/intranet/projects/${proj.id}/tasks/${localTask.id}/comments`, {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ from:me.username, text:comment })
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ from: me.username, text: comment })
     });
     setComment(""); onReload();
-    // Reload task
-    const projs = await fetch(`${API_BASE}/api/intranet/projects`).then(r=>r.json());
-    const p = projs.find((p:Project)=>p.id===proj.id);
-    const t = p?.tasks?.find((t:Task)=>t.id===localTask.id);
+    const projs = await fetch(`${API_BASE}/api/intranet/projects`).then(r => r.json()).catch(() => []);
+    const p = projs.find((p: Project) => p.id === proj.id);
+    const t = p?.tasks?.find((t: Task) => t.id === localTask.id);
     if (t) setLocalTask(t);
   }
 
-  async function changeStatus(newStatus: string) {
-    onMove(newStatus); setLocalTask({...localTask,status:newStatus});
+  function changeStatus(newStatus: string) {
+    onMove(newStatus); setLocalTask({ ...localTask, status: newStatus });
   }
 
   return (
-    <Modal onClose={onClose} title="">
-      <div style={{ display:"flex",alignItems:"center",gap:10,marginBottom:14 }}>
-        <div style={{ width:10,height:10,borderRadius:"50%",background:proj.color,flexShrink:0 }} />
-        <span style={{ fontSize:11,color:"var(--muted-foreground)" }}>{proj.name}</span>
-        <PriorityDot priority={localTask.priority} />
-        <span style={{ fontSize:11,color:PRIORITY_CFG[localTask.priority]?.color }}>{PRIORITY_CFG[localTask.priority]?.label}</span>
-      </div>
-      <div style={{ fontWeight:800,fontSize:17,marginBottom:8 }}>{localTask.title}</div>
-      {localTask.desc && <div style={{ fontSize:13,color:"var(--muted-foreground)",marginBottom:14,lineHeight:1.5 }}>{localTask.desc}</div>}
-
-      <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14 }}>
-        <Field label="Estado">
-          <select value={localTask.status} onChange={e=>changeStatus(e.target.value)} className="inp">
-            {STATUS_COLS.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
-        </Field>
-        <Field label="Asignado a">
-          <div style={{ display:"flex",alignItems:"center",gap:6,padding:"7px 10px",borderRadius:8,border:"1px solid var(--border)",background:"var(--background)" }}>
-            {assignee ? <><Avatar user={assignee} size={20} /><span style={{ fontSize:12 }}>{assignee.nombre||assignee.username}</span></> : <span style={{ fontSize:12,color:"var(--muted-foreground)" }}>Sin asignar</span>}
+    <div className="pm-detail-overlay">
+      <div className="pm-detail-backdrop" onClick={onClose} />
+      <div className="pm-detail-panel">
+        {/* Header del panel */}
+        <div className="pm-detail-header">
+          <div style={{ width: 10, height: 10, borderRadius: 3, background: proj.color, flexShrink: 0 }} />
+          <span className="pm-detail-breadcrumb">{proj.name}</span>
+          <div className="pm-detail-header-actions">
+            {(me.role === "admin" || me.role === "editor") &&
+              <button className="pm-btn-danger" style={{ fontSize: 11 }} onClick={onDelete}>Eliminar</button>}
+            <button style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9aa3ae", lineHeight: 1 }} onClick={onClose}>×</button>
           </div>
-        </Field>
-      </div>
-      {localTask.dueDate && <div style={{ fontSize:12,color:"var(--muted-foreground)",marginBottom:14 }}>📅 Fecha límite: <b>{localTask.dueDate}</b></div>}
+        </div>
 
-      {/* Comentarios */}
-      <div style={{ borderTop:"1px solid var(--border)",paddingTop:14,marginTop:4 }}>
-        <div style={{ fontWeight:700,fontSize:12,marginBottom:10 }}>Comentarios ({(localTask.comments||[]).length})</div>
-        <div style={{ maxHeight:180,overflowY:"auto",marginBottom:10 }}>
-          {(localTask.comments||[]).map((c:Comment) => {
-            const cu = users.find((u:User)=>u.username===c.from);
-            return (
-              <div key={c.id} style={{ display:"flex",gap:8,marginBottom:10 }}>
-                <Avatar user={cu} size={26} />
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:11,fontWeight:700 }}>{cu?.nombre||c.from} <span style={{ fontWeight:400,color:"var(--muted-foreground)"}}>{fmtTime(c.ts)}</span></div>
-                  <div style={{ fontSize:12.5,marginTop:2,lineHeight:1.4 }}>{c.text}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ display:"flex",gap:8 }}>
-          <input value={comment} onChange={e=>setComment(e.target.value)}
-            onKeyDown={e=>{if(e.key==="Enter")addComment();}}
-            placeholder="Escribe un comentario..."
-            style={{ flex:1,padding:"8px 12px",borderRadius:9,border:"1.5px solid var(--border)",background:"var(--background)",fontSize:12.5,fontFamily:"inherit",outline:"none" }} />
-          <button onClick={addComment} style={{ padding:"8px 14px",borderRadius:9,border:"none",background:"var(--primary)",color:"var(--primary-foreground)",cursor:"pointer",fontSize:12,fontWeight:700 }}>→</button>
+        <div className="pm-detail-body">
+          {/* Main content */}
+          <div className="pm-detail-main">
+            <div className="pm-detail-title">{localTask.title}</div>
+
+            {/* Chips de metadatos */}
+            <div className="pm-detail-meta">
+              <span className="pm-detail-chip">
+                <span style={{ fontSize: 11 }}>⊙</span>
+                <span>{(localTask.comments || []).length} comentarios</span>
+              </span>
+              {localTask.dueDate && (
+                <span className="pm-detail-chip">
+                  <span style={{ fontSize: 11 }}>📅</span>
+                  <span>{localTask.dueDate}</span>
+                </span>
+              )}
+              <span className="pm-detail-chip" style={{ cursor: "default" }}>
+                <PMPriorityFlag priority={localTask.priority} />
+              </span>
+            </div>
+
+            {/* Estado */}
+            <div style={{ marginBottom: 16 }}>
+              <div className="pm-detail-section-label">Estado</div>
+              <select className="pm-inp" style={{ maxWidth: 200 }} value={localTask.status} onChange={e => changeStatus(e.target.value)}>
+                {STATUS_COLS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </div>
+
+            {/* Asignado */}
+            <div style={{ marginBottom: 16 }}>
+              <div className="pm-detail-section-label">Encargado</div>
+              {assignee
+                ? <div style={{ display: "flex", alignItems: "center", gap: 8 }}><PMAvatar user={assignee} size={26} /><span style={{ fontSize: 13 }}>{assignee.nombre || assignee.username}</span></div>
+                : <span style={{ fontSize: 13, color: "#9aa3ae" }}>Sin asignar</span>}
+            </div>
+
+            {/* Descripción */}
+            <div style={{ marginBottom: 16 }}>
+              <div className="pm-detail-section-label">Descripción</div>
+              <div className="pm-detail-desc">{localTask.desc || <span style={{ color: "#b0b8c4" }}>Sin descripción</span>}</div>
+            </div>
+          </div>
+
+          {/* Panel de comentarios */}
+          <div className="pm-detail-comments">
+            <div style={{ fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: ".06em", color: "#9aa3ae", marginBottom: 12 }}>Comentarios</div>
+            <div className="pm-detail-comment-list">
+              {(localTask.comments || []).length === 0
+                ? <div style={{ fontSize: 11.5, color: "#b0b8c4", textAlign: "center", marginTop: 20 }}>Sin comentarios</div>
+                : (localTask.comments || []).map((c: Comment) => {
+                  const cu = users.find((u: User) => u.username === c.from);
+                  return (
+                    <div key={c.id} className="pm-detail-comment-item">
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                        <PMAvatar user={cu} size={20} />
+                        <div>
+                          <div className="pm-detail-comment-meta">{cu?.nombre || c.from}</div>
+                          <div style={{ fontSize: 9.5, color: "#b0b8c4" }}>{fmtTime(c.ts)}</div>
+                        </div>
+                      </div>
+                      <div className="pm-detail-comment-text">{c.text}</div>
+                    </div>
+                  );
+                })}
+            </div>
+            <div className="pm-detail-comment-input">
+              <textarea className="pm-detail-input" rows={2} value={comment} onChange={e => setComment(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addComment(); } }}
+                placeholder="Comentario..." />
+            </div>
+            <button className="pm-btn-primary" style={{ width: "100%", marginTop: 6, fontSize: 12, padding: "7px" }} onClick={addComment}>Enviar</button>
+          </div>
         </div>
       </div>
-      {(me.role==="admin"||me.role==="editor") && (
-        <button onClick={onDelete} style={{ marginTop:14,width:"100%",padding:"8px",borderRadius:9,border:"1.5px solid #ef4444",background:"transparent",color:"#ef4444",cursor:"pointer",fontSize:12 }}>Eliminar tarea</button>
-      )}
-    </Modal>
+    </div>
   );
 }
+
 
 // ══════════════════════════════════════════════════════════════════
 // MAIN APP SHELL
