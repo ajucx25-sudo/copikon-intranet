@@ -452,10 +452,19 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
   const [ntAssignee, setNtAssignee] = useState(""); const [ntPriority, setNtPriority] = useState("media");
   const [ntDue, setNtDue] = useState(""); const [ntStatus, setNtStatus] = useState("pendiente");
 
+  // ID local para proyectos/tareas creados offline
+  function localId() { return "local_" + Date.now().toString(36); }
+
   const loadProjects = useCallback(async () => {
-    const data = await fetch(`${API_BASE}/api/intranet/projects`).then(r=>r.json()).catch(()=>[]);
-    setProjects(data);
-    if (selectedProj) setSelectedProj(data.find((p:Project)=>p.id===selectedProj.id)||null);
+    try {
+      const data = await fetch(`${API_BASE}/api/intranet/projects`).then(r=>r.ok?r.json():Promise.reject()).catch(()=>null);
+      if (data && Array.isArray(data)) {
+        setProjects(data);
+        if (selectedProj) setSelectedProj(data.find((p:Project)=>p.id===selectedProj.id)||null);
+        return;
+      }
+    } catch {}
+    // Si el servidor falla, mantener el estado actual
   }, [selectedProj]);
 
   useEffect(() => { loadProjects(); }, []);
@@ -464,44 +473,67 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
   useEffect(() => {
     const es = new EventSource(`${API_BASE}/api/intranet/sse/${me.username}`);
     es.onmessage = (e) => {
-      const { event } = JSON.parse(e.data);
-      if (["task_assigned","task_updated"].includes(event)) loadProjects();
+      try {
+        const { event } = JSON.parse(e.data);
+        if (["task_assigned","task_updated"].includes(event)) loadProjects();
+      } catch {}
     };
     return () => es.close();
   }, [me.username, loadProjects]);
 
   async function createProject() {
     if (!npName.trim()) return;
-    await fetch(`${API_BASE}/api/intranet/projects`, { method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ name:npName, desc:npDesc, color:npColor, owner:me.username, members:[] }) });
+    // Crear inmediatamente en memoria
+    const newProj: Project = { id: localId(), name: npName.trim(), desc: npDesc, color: npColor,
+      owner: me.username, members: [], tasks: [], createdAt: Date.now() };
+    setProjects(prev => [...prev, newProj]);
     setNpName(""); setNpDesc(""); setNpColor("#4a7fd4"); setShowNewProj(false);
-    loadProjects();
+    // Sincronizar con servidor en background
+    fetch(`${API_BASE}/api/intranet/projects`, { method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ name:newProj.name, desc:newProj.desc, color:newProj.color, owner:me.username, members:[] }) })
+      .then(r=>r.ok?r.json():null).then(p=>{ if(p) setProjects(prev=>prev.map(x=>x.id===newProj.id?p:x)); }).catch(()=>{});
   }
 
   async function createTask() {
     if (!ntTitle.trim() || !selectedProj) return;
-    await fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ title:ntTitle, desc:ntDesc, assignee:ntAssignee||null, priority:ntPriority, dueDate:ntDue||null, status:ntStatus }) });
+    const newTask: Task = { id: localId(), title: ntTitle.trim(), desc: ntDesc,
+      assignee: ntAssignee||null, priority: ntPriority, dueDate: ntDue||null,
+      status: ntStatus, createdAt: Date.now(), comments: [] };
+    // Agregar tarea en memoria
+    setProjects(prev => prev.map(p => p.id===selectedProj.id
+      ? {...p, tasks:[...(p.tasks||[]), newTask]} : p));
+    setSelectedProj(prev => prev ? {...prev, tasks:[...(prev.tasks||[]), newTask]} : prev);
     setNtTitle(""); setNtDesc(""); setNtAssignee(""); setNtPriority("media"); setNtDue(""); setNtStatus("pendiente");
-    setShowNewTask(false); loadProjects();
+    setShowNewTask(false);
+    // Sincronizar con servidor
+    fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ title:newTask.title, desc:newTask.desc, assignee:newTask.assignee, priority:newTask.priority, dueDate:newTask.dueDate, status:newTask.status }) })
+      .then(r=>r.ok?r.json():null).then(t=>{ if(t) { setProjects(prev=>prev.map(p=>p.id===selectedProj.id?{...p,tasks:(p.tasks||[]).map(x=>x.id===newTask.id?t:x)}:p)); } }).catch(()=>{});
   }
 
   async function moveTask(taskId: string, projId: string, newStatus: string) {
-    await fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method:"PUT", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ status:newStatus }) });
-    loadProjects();
+    // Actualizar en memoria inmediatamente
+    setProjects(prev => prev.map(p => p.id===projId
+      ? {...p, tasks:(p.tasks||[]).map(t=>t.id===taskId?{...t,status:newStatus}:t)} : p));
+    if (selectedProj?.id===projId) setSelectedProj(prev => prev ? {...prev, tasks:(prev.tasks||[]).map(t=>t.id===taskId?{...t,status:newStatus}:t)} : prev);
+    // Sincronizar con servidor
+    fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method:"PUT", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ status:newStatus }) }).catch(()=>{});
   }
 
   async function deleteTask(taskId: string, projId: string) {
     if (!confirm("¿Eliminar esta tarea?")) return;
-    await fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method:"DELETE" });
-    setSelectedTask(null); loadProjects();
+    setProjects(prev => prev.map(p => p.id===projId?{...p,tasks:(p.tasks||[]).filter(t=>t.id!==taskId)}:p));
+    if (selectedProj?.id===projId) setSelectedProj(prev=>prev?{...prev,tasks:(prev.tasks||[]).filter(t=>t.id!==taskId)}:prev);
+    setSelectedTask(null);
+    fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method:"DELETE" }).catch(()=>{});
   }
 
   async function deleteProject(projId: string) {
     if (!confirm("¿Eliminar este proyecto y todas sus tareas?")) return;
-    await fetch(`${API_BASE}/api/intranet/projects/${projId}`, { method:"DELETE" });
-    setSelectedProj(null); loadProjects();
+    setProjects(prev => prev.filter(p=>p.id!==projId));
+    setSelectedProj(null);
+    fetch(`${API_BASE}/api/intranet/projects/${projId}`, { method:"DELETE" }).catch(()=>{});
   }
 
   const proj = selectedProj;
