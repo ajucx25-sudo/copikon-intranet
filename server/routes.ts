@@ -184,12 +184,16 @@ export function registerRoutes(server: Server, app: Express): Server {
   // PROJECT MANAGER
   // ══════════════════════════════════════════════
 
-  // Proyectos
-  app.get("/api/projects", (_req, res) => {
+  // Proyectos — registra rutas con y sin prefijo /intranet/ para compatibilidad
+  const projectPrefixes = ["/api", "/api/intranet"];
+
+  projectPrefixes.forEach(pfx => {
+
+  app.get(`${pfx}/projects`, (_req, res) => {
     res.json(readJSON(FILES.projects, []));
   });
 
-  app.post("/api/projects", (req, res) => {
+  app.post(`${pfx}/projects`, (req, res) => {
     const { name, desc, color, owner, members } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Nombre requerido" });
     const projects: any[] = readJSON(FILES.projects, []);
@@ -203,7 +207,7 @@ export function registerRoutes(server: Server, app: Express): Server {
     res.json(proj);
   });
 
-  app.put("/api/projects/:id", (req, res) => {
+  app.put(`${pfx}/projects/:id`, (req, res) => {
     const projects: any[] = readJSON(FILES.projects, []);
     const idx = projects.findIndex(p => p.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: "No encontrado" });
@@ -212,7 +216,7 @@ export function registerRoutes(server: Server, app: Express): Server {
     res.json(projects[idx]);
   });
 
-  app.delete("/api/projects/:id", (req, res) => {
+  app.delete(`${pfx}/projects/:id`, (req, res) => {
     let projects: any[] = readJSON(FILES.projects, []);
     projects = projects.filter(p => p.id !== req.params.id);
     writeJSON(FILES.projects, projects);
@@ -220,14 +224,14 @@ export function registerRoutes(server: Server, app: Express): Server {
   });
 
   // Tareas dentro de un proyecto
-  app.get("/api/projects/:id/tasks", (req, res) => {
+  app.get(`${pfx}/projects/:id/tasks`, (req, res) => {
     const projects: any[] = readJSON(FILES.projects, []);
     const proj = projects.find(p => p.id === req.params.id);
     if (!proj) return res.status(404).json({ error: "No encontrado" });
     res.json(proj.tasks || []);
   });
 
-  app.post("/api/projects/:id/tasks", (req, res) => {
+  app.post(`${pfx}/projects/:id/tasks`, (req, res) => {
     const { title, desc, assignee, priority, dueDate, status } = req.body;
     if (!title?.trim()) return res.status(400).json({ error: "Título requerido" });
     const projects: any[] = readJSON(FILES.projects, []);
@@ -246,7 +250,7 @@ export function registerRoutes(server: Server, app: Express): Server {
     res.json(task);
   });
 
-  app.put("/api/projects/:projId/tasks/:taskId", (req, res) => {
+  app.put(`${pfx}/projects/:projId/tasks/:taskId`, (req, res) => {
     const projects: any[] = readJSON(FILES.projects, []);
     const proj = projects.find(p => p.id === req.params.projId);
     if (!proj) return res.status(404).json({ error: "Proyecto no encontrado" });
@@ -261,7 +265,7 @@ export function registerRoutes(server: Server, app: Express): Server {
     res.json(proj.tasks[ti]);
   });
 
-  app.delete("/api/projects/:projId/tasks/:taskId", (req, res) => {
+  app.delete(`${pfx}/projects/:projId/tasks/:taskId`, (req, res) => {
     const projects: any[] = readJSON(FILES.projects, []);
     const proj = projects.find(p => p.id === req.params.projId);
     if (!proj) return res.status(404).json({ error: "No encontrado" });
@@ -270,8 +274,11 @@ export function registerRoutes(server: Server, app: Express): Server {
     res.json({ ok: true });
   });
 
+  }); // fin forEach prefijos
+
   // Comentarios en tarea
-  app.post("/api/projects/:projId/tasks/:taskId/comments", (req, res) => {
+  ["/api", "/api/intranet"].forEach(pfx => {
+  app.post(`${pfx}/projects/:projId/tasks/:taskId/comments`, (req, res) => {
     const { from, text } = req.body;
     if (!text?.trim()) return res.status(400).json({ error: "Texto requerido" });
     const projects: any[] = readJSON(FILES.projects, []);
@@ -284,6 +291,7 @@ export function registerRoutes(server: Server, app: Express): Server {
     writeJSON(FILES.projects, projects);
     res.json(comment);
   });
+  }); // fin forEach comentarios
 
   return server;
 }
