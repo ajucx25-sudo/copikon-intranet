@@ -11,17 +11,21 @@ function detectApiBase(): string {
 }
 const API_BASE: string = detectApiBase();
 
-// PM_BASE para proyectos — URL absoluta del servidor
-// Prioridad: 1) ?apibase= pasado por el organigrama (URL absoluta correcta)
-//            2) __PORT_5000__ reemplazado por deploy (relativo, funciona desde la raíz)
-//            3) vacío (desarrollo local)
+// PM_BASE para proyectos — URL del servidor Express del organigrama
 function detectPmBase(): string {
+  // 1. ?apibase= pasado por el organigrama
   const qs = new URLSearchParams(window.location.search);
   const apibase = qs.get("apibase");
-  if (apibase && apibase.length > 0) return apibase; // URL absoluta del organigrama
+  if (apibase && apibase.length > 0) {
+    // Normalizar: si no empieza con / ni http, agregar /
+    if (!apibase.startsWith('/') && !apibase.startsWith('http')) return '/' + apibase;
+    return apibase;
+  }
+  // 2. __PORT_5000__ reemplazado por deploy_website (viene como "port/5000" sin slash)
   const raw = "__PORT_5000__";
-  if (!raw.startsWith("__")) return "/" + raw;       // deploy_website reemplazó
-  return "";                                          // desarrollo local
+  if (!raw.startsWith("__")) return "/" + raw;
+  // 3. desarrollo local
+  return "";
 }
 const PM_BASE: string = detectPmBase();
 
