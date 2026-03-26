@@ -31,7 +31,19 @@ import { apiRequest } from "./lib/queryClient";
 interface User { username: string; nombre: string; cargo: string; gerencia: string; role: string; cargoId: string; }
 interface Message { id: string; from: string; to?: string; channelId?: string; convId?: string; text: string; ts: number; read?: boolean; }
 interface Channel { id: string; name: string; gerencia: string; color: string; desc: string; }
-interface Task { id: string; title: string; desc: string; assignee: string|null; priority: string; dueDate: string|null; status: string; createdAt: number; comments: Comment[]; }
+interface CheckItem { id: string; text: string; done: boolean; }
+interface SubTask { id: string; title: string; status: string; assignee: string|null; }
+interface Task {
+  id: string; title: string; desc: string;
+  assignee: string|null; priority: string;
+  startDate: string|null; dueDate: string|null; duration: number|null;
+  status: string; percent: number;
+  hoursEstimated: number|null; hoursActual: number;
+  labels: string[];
+  checklist: CheckItem[];
+  subtasks: SubTask[];
+  createdAt: number; comments: Comment[];
+}
 interface Project { id: string; name: string; desc: string; color: string; owner: string; members: string[]; tasks: Task[]; createdAt: number; }
 interface Comment { id: string; from: string; text: string; ts: number; }
 
@@ -1051,10 +1063,32 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
   );
 }
 
+
 function PMTaskDetail({ task, proj, users, me, onClose, onMove, onDelete, onReload }: any) {
   const [comment, setComment] = useState("");
-  const [localTask, setLocalTask] = useState<Task>(task);
+  const [localTask, setLocalTask] = useState<Task>({
+    startDate: null, duration: null, percent: 0,
+    hoursEstimated: null, hoursActual: 0,
+    labels: [], checklist: [], subtasks: [],
+    ...task
+  });
+  const [newCheckItem, setNewCheckItem] = useState("");
+  const [newSubtask, setNewSubtask] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [editingDesc, setEditingDesc] = useState(false);
+  const [descDraft, setDescDraft] = useState(localTask.desc || "");
   const assignee = users.find((u: User) => u.username === localTask.assignee);
+
+  // Guardar campo en servidor
+  async function saveField(patch: Partial<Task>) {
+    const updated = { ...localTask, ...patch };
+    setLocalTask(updated);
+    fetch(`${API_BASE}/api/intranet/projects/${proj.id}/tasks/${localTask.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch)
+    }).catch(() => {});
+    onReload();
+  }
 
   async function addComment() {
     if (!comment.trim()) return;
@@ -1066,75 +1100,302 @@ function PMTaskDetail({ task, proj, users, me, onClose, onMove, onDelete, onRelo
     const projs = await fetch(`${API_BASE}/api/intranet/projects`).then(r => r.json()).catch(() => []);
     const p = projs.find((p: Project) => p.id === proj.id);
     const t = p?.tasks?.find((t: Task) => t.id === localTask.id);
-    if (t) setLocalTask(t);
+    if (t) setLocalTask({ startDate: null, duration: null, percent: 0, hoursEstimated: null, hoursActual: 0, labels: [], checklist: [], subtasks: [], ...t });
   }
 
-  function changeStatus(newStatus: string) {
-    onMove(newStatus); setLocalTask({ ...localTask, status: newStatus });
+  function addCheckItem() {
+    if (!newCheckItem.trim()) return;
+    const item: CheckItem = { id: "ci_" + Date.now().toString(36), text: newCheckItem.trim(), done: false };
+    const updated = [...(localTask.checklist || []), item];
+    setNewCheckItem("");
+    saveField({ checklist: updated });
   }
+
+  function toggleCheckItem(id: string) {
+    const updated = (localTask.checklist || []).map((c: CheckItem) => c.id === id ? { ...c, done: !c.done } : c);
+    saveField({ checklist: updated });
+  }
+
+  function removeCheckItem(id: string) {
+    const updated = (localTask.checklist || []).filter((c: CheckItem) => c.id !== id);
+    saveField({ checklist: updated });
+  }
+
+  function addSubtask() {
+    if (!newSubtask.trim()) return;
+    const sub: SubTask = { id: "st_" + Date.now().toString(36), title: newSubtask.trim(), status: "pendiente", assignee: null };
+    const updated = [...(localTask.subtasks || []), sub];
+    setNewSubtask("");
+    saveField({ subtasks: updated });
+  }
+
+  function toggleSubtask(id: string) {
+    const updated = (localTask.subtasks || []).map((s: SubTask) => s.id === id ? { ...s, status: s.status === "completado" ? "pendiente" : "completado" } : s);
+    saveField({ subtasks: updated });
+  }
+
+  function removeSubtask(id: string) {
+    const updated = (localTask.subtasks || []).filter((s: SubTask) => s.id !== id);
+    saveField({ subtasks: updated });
+  }
+
+  function addLabel() {
+    if (!newLabel.trim()) return;
+    const updated = [...new Set([...(localTask.labels || []), newLabel.trim()])];
+    setNewLabel("");
+    saveField({ labels: updated });
+  }
+
+  function removeLabel(lbl: string) {
+    saveField({ labels: (localTask.labels || []).filter((l: string) => l !== lbl) });
+  }
+
+  const checkDone = (localTask.checklist || []).filter((c: CheckItem) => c.done).length;
+  const checkTotal = (localTask.checklist || []).length;
+  const subDone = (localTask.subtasks || []).filter((s: SubTask) => s.status === "completado").length;
+  const subTotal = (localTask.subtasks || []).length;
+
+  const LABEL_COLORS: Record<string, string> = {
+    urgente: "#ef4444", revisión: "#f59e0b", diseño: "#a06ad4",
+    desarrollo: "#4a7fd4", cliente: "#3cb371", interno: "#6b7a99"
+  };
 
   return (
     <div className="pm-detail-overlay">
       <div className="pm-detail-backdrop" onClick={onClose} />
-      <div className="pm-detail-panel">
-        {/* Header del panel */}
+      <div className="pm-detail-panel" style={{ width: 680 }}>
+
+        {/* Header */}
         <div className="pm-detail-header">
           <div style={{ width: 10, height: 10, borderRadius: 3, background: proj.color, flexShrink: 0 }} />
           <span className="pm-detail-breadcrumb">{proj.name}</span>
           <div className="pm-detail-header-actions">
             {(me.role === "admin" || me.role === "editor") &&
               <button className="pm-btn-danger" style={{ fontSize: 11 }} onClick={onDelete}>Eliminar</button>}
-            <button style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#9aa3ae", lineHeight: 1 }} onClick={onClose}>×</button>
+            <button style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9aa3ae", lineHeight: 1 }} onClick={onClose}>×</button>
           </div>
         </div>
 
-        <div className="pm-detail-body">
-          {/* Main content */}
-          <div className="pm-detail-main">
+        <div className="pm-detail-body" style={{ overflow: "hidden" }}>
+          {/* Main scrollable */}
+          <div className="pm-detail-main" style={{ flex: 1, overflowY: "auto" }}>
+
+            {/* Título */}
             <div className="pm-detail-title">{localTask.title}</div>
 
-            {/* Chips de metadatos */}
-            <div className="pm-detail-meta">
-              <span className="pm-detail-chip">
-                <span style={{ fontSize: 11 }}>⊙</span>
-                <span>{(localTask.comments || []).length} comentarios</span>
-              </span>
-              {localTask.dueDate && (
-                <span className="pm-detail-chip">
-                  <span style={{ fontSize: 11 }}>📅</span>
-                  <span>{localTask.dueDate}</span>
-                </span>
-              )}
-              <span className="pm-detail-chip" style={{ cursor: "default" }}>
-                <PMPriorityFlag priority={localTask.priority} />
-              </span>
+            {/* Chips de metadatos — fila 1 */}
+            <div className="pm-detail-meta" style={{ marginBottom: 10 }}>
+              {/* % Avance */}
+              <div className="pm-detail-chip" style={{ gap: 6, minWidth: 80 }}>
+                <span style={{ fontSize: 10 }}>⊙</span>
+                <input
+                  type="number" min={0} max={100}
+                  value={localTask.percent || 0}
+                  onChange={e => saveField({ percent: Math.min(100, Math.max(0, Number(e.target.value))) })}
+                  style={{ width: 38, border: "none", background: "transparent", fontSize: 11.5, outline: "none", fontFamily: "inherit", color: "#4a5568" }}
+                />
+                <span style={{ fontSize: 10.5, color: "#9aa3ae" }}>%</span>
+              </div>
+
+              {/* Horas */}
+              <div className="pm-detail-chip" style={{ gap: 5 }}>
+                <span style={{ fontSize: 10, color: "#22c55e" }}>●</span>
+                <input
+                  type="number" min={0}
+                  value={localTask.hoursActual || 0}
+                  onChange={e => saveField({ hoursActual: Number(e.target.value) })}
+                  style={{ width: 28, border: "none", background: "transparent", fontSize: 11.5, outline: "none", fontFamily: "inherit", color: "#4a5568" }}
+                />
+                <span style={{ fontSize: 10.5, color: "#9aa3ae" }}>/</span>
+                <input
+                  type="number" min={0}
+                  value={localTask.hoursEstimated || 0}
+                  onChange={e => saveField({ hoursEstimated: Number(e.target.value) })}
+                  style={{ width: 28, border: "none", background: "transparent", fontSize: 11.5, outline: "none", fontFamily: "inherit", color: "#4a5568" }}
+                />
+                <span style={{ fontSize: 10.5, color: "#9aa3ae" }}>h</span>
+              </div>
+
+              {/* Fecha límite */}
+              <div className="pm-detail-chip">
+                <span style={{ fontSize: 10.5 }}>📅</span>
+                <input type="date"
+                  value={localTask.dueDate || ""}
+                  onChange={e => saveField({ dueDate: e.target.value || null })}
+                  style={{ border: "none", background: "transparent", fontSize: 11.5, outline: "none", fontFamily: "inherit", color: localTask.dueDate ? "#4a5568" : "#b0b8c4", cursor: "pointer" }}
+                />
+              </div>
+
+              {/* Duración */}
+              <div className="pm-detail-chip" style={{ gap: 5 }}>
+                <span style={{ fontSize: 10.5 }}>⏱</span>
+                <input
+                  type="number" min={0}
+                  value={localTask.duration || ""}
+                  placeholder="días"
+                  onChange={e => saveField({ duration: e.target.value ? Number(e.target.value) : null })}
+                  style={{ width: 36, border: "none", background: "transparent", fontSize: 11.5, outline: "none", fontFamily: "inherit", color: "#4a5568" }}
+                />
+                <span style={{ fontSize: 10.5, color: "#9aa3ae" }}>días</span>
+              </div>
+
+              {/* Prioridad */}
+              <div className="pm-detail-chip" style={{ padding: "4px 6px" }}>
+                <select value={localTask.priority}
+                  onChange={e => saveField({ priority: e.target.value })}
+                  style={{ border: "none", background: "transparent", fontSize: 11.5, outline: "none", fontFamily: "inherit", color: PRIORITY_CFG[localTask.priority]?.color || "#9aa3ae", cursor: "pointer", fontWeight: 600 }}>
+                  <option value="baja">⚑ Baja</option>
+                  <option value="media">⚑ Media</option>
+                  <option value="alta">⚑ Alta</option>
+                </select>
+              </div>
+
+              {/* Estado */}
+              <div className="pm-detail-chip" style={{ padding: "4px 6px" }}>
+                <select value={localTask.status}
+                  onChange={e => { saveField({ status: e.target.value }); onMove(e.target.value); }}
+                  style={{ border: "none", background: "transparent", fontSize: 11.5, outline: "none", fontFamily: "inherit", color: STATUS_COLS.find(s => s.id === localTask.status)?.color || "#9aa3ae", cursor: "pointer", fontWeight: 600 }}>
+                  {STATUS_COLS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+              </div>
             </div>
 
-            {/* Estado */}
-            <div style={{ marginBottom: 16 }}>
-              <div className="pm-detail-section-label">Estado</div>
-              <select className="pm-inp" style={{ maxWidth: 200 }} value={localTask.status} onChange={e => changeStatus(e.target.value)}>
-                {STATUS_COLS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-              </select>
+            {/* Barra de progreso */}
+            <div style={{ marginBottom: 18 }}>
+              <div className="pm-progress-bar" style={{ width: "100%", height: 8 }}>
+                <div className="pm-progress-fill" style={{ width: (localTask.percent || 0) + "%", transition: "width .3s" }} />
+              </div>
             </div>
 
-            {/* Asignado */}
-            <div style={{ marginBottom: 16 }}>
-              <div className="pm-detail-section-label">Encargado</div>
-              {assignee
-                ? <div style={{ display: "flex", alignItems: "center", gap: 8 }}><PMAvatar user={assignee} size={26} /><span style={{ fontSize: 13 }}>{assignee.nombre || assignee.username}</span></div>
-                : <span style={{ fontSize: 13, color: "#9aa3ae" }}>Sin asignar</span>}
+            {/* Fechas inicio / fin */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 18 }}>
+              <div>
+                <div className="pm-detail-section-label">Inicio planificado</div>
+                <input type="date" className="pm-inp" style={{ fontSize: 12 }}
+                  value={localTask.startDate || ""}
+                  onChange={e => saveField({ startDate: e.target.value || null })} />
+              </div>
+              <div>
+                <div className="pm-detail-section-label">Fecha límite</div>
+                <input type="date" className="pm-inp" style={{ fontSize: 12 }}
+                  value={localTask.dueDate || ""}
+                  onChange={e => saveField({ dueDate: e.target.value || null })} />
+              </div>
+              <div>
+                <div className="pm-detail-section-label">Encargado</div>
+                <select className="pm-inp" style={{ fontSize: 12 }}
+                  value={localTask.assignee || ""}
+                  onChange={e => saveField({ assignee: e.target.value || null })}>
+                  <option value="">Sin asignar</option>
+                  {users.map((u: User) => <option key={u.username} value={u.username}>{u.nombre || u.username}</option>)}
+                </select>
+              </div>
             </div>
 
             {/* Descripción */}
-            <div style={{ marginBottom: 16 }}>
-              <div className="pm-detail-section-label">Descripción</div>
-              <div className="pm-detail-desc">{localTask.desc || <span style={{ color: "#b0b8c4" }}>Sin descripción</span>}</div>
+            <div style={{ marginBottom: 18 }}>
+              <div className="pm-detail-section-label" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span>Descripción</span>
+                {!editingDesc && <span style={{ fontSize: 10, color: "#00b8b0", cursor: "pointer", fontWeight: 600 }} onClick={() => { setEditingDesc(true); setDescDraft(localTask.desc || ""); }}>Editar</span>}
+              </div>
+              {editingDesc ? (
+                <div>
+                  <textarea className="pm-inp" rows={3} value={descDraft} onChange={e => setDescDraft(e.target.value)}
+                    style={{ resize: "vertical", fontSize: 13 }} />
+                  <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                    <button className="pm-btn-primary" style={{ fontSize: 11, padding: "5px 12px" }} onClick={() => { saveField({ desc: descDraft }); setEditingDesc(false); }}>Guardar</button>
+                    <button className="pm-btn-ghost" style={{ fontSize: 11, padding: "5px 12px" }} onClick={() => setEditingDesc(false)}>Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="pm-detail-desc" onClick={() => { setEditingDesc(true); setDescDraft(localTask.desc || ""); }}
+                  style={{ cursor: "text", minHeight: 36, padding: "8px 10px", borderRadius: 7, border: "1.5px dashed #e2e5ea" }}>
+                  {localTask.desc || <span style={{ color: "#b0b8c4" }}>Agregar descripción...</span>}
+                </div>
+              )}
             </div>
+
+            {/* Etiquetas */}
+            <div style={{ marginBottom: 18 }}>
+              <div className="pm-detail-section-label">Etiquetas</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                {(localTask.labels || []).map((lbl: string) => (
+                  <span key={lbl} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 9px", borderRadius: 12, fontSize: 11, fontWeight: 600, background: (LABEL_COLORS[lbl] || "#6b7a99") + "20", color: LABEL_COLORS[lbl] || "#6b7a99", border: "1px solid " + (LABEL_COLORS[lbl] || "#6b7a99") + "40" }}>
+                    {lbl}
+                    <span style={{ cursor: "pointer", fontSize: 13, lineHeight: 1, opacity: .7 }} onClick={() => removeLabel(lbl)}>×</span>
+                  </span>
+                ))}
+                <div style={{ display: "flex", gap: 5 }}>
+                  <input className="pm-inp" style={{ width: 110, fontSize: 11, padding: "3px 8px", height: 26 }}
+                    value={newLabel} onChange={e => setNewLabel(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") addLabel(); }}
+                    placeholder="+ Etiqueta" />
+                  {newLabel && <button className="pm-btn-primary" style={{ fontSize: 11, padding: "3px 10px" }} onClick={addLabel}>+</button>}
+                </div>
+              </div>
+            </div>
+
+            {/* Checklist */}
+            <div style={{ marginBottom: 18 }}>
+              <div className="pm-detail-section-label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>Lista de tareas</span>
+                {checkTotal > 0 && <span style={{ fontSize: 10, color: "#9aa3ae" }}>{checkDone}/{checkTotal}</span>}
+              </div>
+              {checkTotal > 0 && (
+                <div style={{ marginBottom: 8 }}>
+                  <div className="pm-progress-bar" style={{ height: 5, marginBottom: 8 }}>
+                    <div className="pm-progress-fill" style={{ width: (checkTotal ? Math.round(checkDone / checkTotal * 100) : 0) + "%" }} />
+                  </div>
+                </div>
+              )}
+              {(localTask.checklist || []).map((item: CheckItem) => (
+                <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "5px 0", borderBottom: "1px solid #f0f2f4" }}>
+                  <div className={`pm-list-check ${item.done ? "done" : ""}`} style={{ cursor: "pointer" }} onClick={() => toggleCheckItem(item.id)}>
+                    {item.done ? "✓" : ""}
+                  </div>
+                  <span style={{ flex: 1, fontSize: 13, color: item.done ? "#9aa3ae" : "#2d3748", textDecoration: item.done ? "line-through" : "none" }}>{item.text}</span>
+                  <span style={{ cursor: "pointer", color: "#b0b8c4", fontSize: 15 }} onClick={() => removeCheckItem(item.id)}>×</span>
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: 7, marginTop: 8 }}>
+                <input className="pm-inp" style={{ fontSize: 12 }} placeholder="Agregar tarea pendiente..."
+                  value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") addCheckItem(); }} />
+                {newCheckItem && <button className="pm-btn-primary" style={{ fontSize: 12, padding: "6px 12px" }} onClick={addCheckItem}>+</button>}
+              </div>
+            </div>
+
+            {/* Subtareas */}
+            <div style={{ marginBottom: 18 }}>
+              <div className="pm-detail-section-label" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span>Subtareas</span>
+                {subTotal > 0 && <span style={{ fontSize: 10, color: "#9aa3ae" }}>{subDone}/{subTotal}</span>}
+              </div>
+              {(localTask.subtasks || []).map((sub: SubTask) => {
+                const done = sub.status === "completado";
+                return (
+                  <div key={sub.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 0", borderBottom: "1px solid #f0f2f4" }}>
+                    <div className={`pm-list-check ${done ? "done" : ""}`} style={{ cursor: "pointer" }} onClick={() => toggleSubtask(sub.id)}>
+                      {done ? "✓" : ""}
+                    </div>
+                    <span style={{ flex: 1, fontSize: 13, color: done ? "#9aa3ae" : "#2d3748", textDecoration: done ? "line-through" : "none" }}>{sub.title}</span>
+                    <PMStatusPill status={sub.status} />
+                    <span style={{ cursor: "pointer", color: "#b0b8c4", fontSize: 15 }} onClick={() => removeSubtask(sub.id)}>×</span>
+                  </div>
+                );
+              })}
+              <div style={{ display: "flex", gap: 7, marginTop: 8 }}>
+                <input className="pm-inp" style={{ fontSize: 12 }} placeholder="Agregar subtarea..."
+                  value={newSubtask} onChange={e => setNewSubtask(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") addSubtask(); }} />
+                {newSubtask && <button className="pm-btn-primary" style={{ fontSize: 12, padding: "6px 12px" }} onClick={addSubtask}>+</button>}
+              </div>
+            </div>
+
           </div>
 
-          {/* Panel de comentarios */}
-          <div className="pm-detail-comments">
+          {/* Panel comentarios */}
+          <div className="pm-detail-comments" style={{ width: 220 }}>
             <div style={{ fontWeight: 700, fontSize: 11, textTransform: "uppercase", letterSpacing: ".06em", color: "#9aa3ae", marginBottom: 12 }}>Comentarios</div>
             <div className="pm-detail-comment-list">
               {(localTask.comments || []).length === 0
