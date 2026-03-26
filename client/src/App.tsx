@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 // API_BASE: detecta si estamos en el proxy de Perplexity (sites.pplx.app)
-// En ese caso, usa "port/5000" como prefijo que el proxy entiende
-// En desarrollo local, usa "" (rutas relativas)
 function detectApiBase(): string {
   const qs = new URLSearchParams(window.location.search);
   const fromParam = qs.get("apibase");
@@ -12,6 +10,19 @@ function detectApiBase(): string {
   return "";
 }
 const API_BASE: string = detectApiBase();
+
+// ── Proyectos inyectados en el HTML al momento del build ────────
+function lsLoadProjects(): Project[] {
+  // Usar proyectos inyectados en el build como fallback
+  const injected = (window as any).__INTRANET_PROJECTS__;
+  if (Array.isArray(injected) && injected.length > 0) return injected;
+  return [];
+}
+function lsSaveProjects(_projects: Project[]) {
+  // No-op: proyectos se persisten vía servidor Express
+  // Se re-inyectan en el HTML en cada deploy/build
+}
+function lsNextId() { return "ls_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); }
 
 // Usuario pre-autenticado desde el organigrama (pasado por ?user=)
 function getAutoLoginUser(): any | null {
@@ -625,12 +636,36 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
 
   function localId() { return "local_" + Date.now().toString(36); }
 
+  // ── Helper: actualiza estado + localStorage + intenta sync con servidor ──
+  function updateProjects(updater: (prev: Project[]) => Project[]) {
+    setProjects(prev => {
+      const next = updater(prev);
+      lsSaveProjects(next);
+      return next;
+    });
+  }
+
   const loadProjects = useCallback(async () => {
+    // 1. Cargar desde localStorage inmediatamente
+    const local = lsLoadProjects();
+    if (local.length > 0) {
+      setProjects(local);
+      if (selectedProj) setSelectedProj(local.find((p: Project) => p.id === selectedProj.id) || null);
+    }
+    // 2. Intentar sincronizar con servidor en background
     try {
       const data = await fetch(`${API_BASE}/api/intranet/projects`).then(r => r.ok ? r.json() : Promise.reject()).catch(() => null);
-      if (data && Array.isArray(data)) {
+      if (data && Array.isArray(data) && data.length > 0) {
+        // Merge: servidor gana sobre localStorage si tiene datos
         setProjects(data);
+        lsSaveProjects(data);
         if (selectedProj) setSelectedProj(data.find((p: Project) => p.id === selectedProj.id) || null);
+      } else if (local.length > 0) {
+        // Si servidor está vacío pero localStorage tiene datos, empujar al servidor
+        for (const proj of local) {
+          fetch(`${API_BASE}/api/intranet/projects`, { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: proj.name, desc: proj.desc, color: proj.color, owner: proj.owner, members: proj.members }) }).catch(() => {});
+        }
       }
     } catch {}
   }, [selectedProj]);
@@ -647,36 +682,37 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
 
   async function createProject() {
     if (!npName.trim()) return;
-    const newProj: Project = { id: localId(), name: npName.trim(), desc: npDesc, color: npColor, owner: me.username, members: [], tasks: [], createdAt: Date.now() };
-    setProjects(prev => [...prev, newProj]);
+    const newProj: Project = { id: lsNextId(), name: npName.trim(), desc: npDesc, color: npColor, owner: me.username, members: [], tasks: [], createdAt: Date.now() };
+    updateProjects(prev => [...prev, newProj]);
     setNpName(""); setNpDesc(""); setNpColor("#00b8b0"); setShowNewProj(false);
-    fetch(`${API_BASE}/api/intranet/projects`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: newProj.name, desc: newProj.desc, color: newProj.color, owner: me.username, members: [] }) })
-      .then(r => r.ok ? r.json() : null).then(p => { if (p) setProjects(prev => prev.map(x => x.id === newProj.id ? p : x)); }).catch(() => {});
+    // Sync servidor en background
+    fetch(`${API_BASE}/api/intranet/projects`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newProj.name, desc: newProj.desc, color: newProj.color, owner: me.username, members: [] }) }).catch(() => {});
   }
 
   async function createTask() {
     if (!ntTitle.trim() || !selectedProj) return;
-    const newTask: Task = { id: localId(), title: ntTitle.trim(), desc: ntDesc, assignee: ntAssignee || null, priority: ntPriority, startDate: null, dueDate: ntDue || null, duration: null, status: ntStatus, percent: 0, hoursEstimated: null, hoursActual: 0, labels: [], checklist: [], subtasks: [], createdAt: Date.now(), comments: [] };
-    setProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: [...(p.tasks || []), newTask] } : p));
+    const newTask: Task = { id: lsNextId(), title: ntTitle.trim(), desc: ntDesc, assignee: ntAssignee || null, priority: ntPriority, startDate: null, dueDate: ntDue || null, duration: null, status: ntStatus, percent: 0, hoursEstimated: null, hoursActual: 0, labels: [], checklist: [], subtasks: [], createdAt: Date.now(), comments: [] };
+    updateProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: [...(p.tasks || []), newTask] } : p));
     setSelectedProj(prev => prev ? { ...prev, tasks: [...(prev.tasks || []), newTask] } : prev);
     setNtTitle(""); setNtDesc(""); setNtAssignee(""); setNtPriority("media"); setNtDue(""); setNtStatus("pendiente"); setShowNewTask(false);
-    fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: newTask.title, desc: newTask.desc, assignee: newTask.assignee, priority: newTask.priority, startDate: newTask.startDate, dueDate: newTask.dueDate, duration: newTask.duration, status: newTask.status, percent: newTask.percent, hoursEstimated: newTask.hoursEstimated, labels: newTask.labels, checklist: newTask.checklist, subtasks: newTask.subtasks }) })
-      .then(r => r.ok ? r.json() : null).then(t => { if (t) { setProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: (p.tasks || []).map(x => x.id === newTask.id ? t : x) } : p)); } }).catch(() => {});
+    fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: newTask.title, desc: newTask.desc, assignee: newTask.assignee, priority: newTask.priority, startDate: newTask.startDate, dueDate: newTask.dueDate, duration: newTask.duration, status: newTask.status, percent: newTask.percent, hoursEstimated: newTask.hoursEstimated, labels: newTask.labels, checklist: newTask.checklist, subtasks: newTask.subtasks }) }).catch(() => {});
   }
 
   async function createInlineTask(status: string) {
     if (!inlineTask.trim() || !selectedProj) return;
     const title = inlineTask.trim();
     setInlineTask("");
-    const newTask: Task = { id: localId(), title, desc: "", assignee: null, priority: "media", startDate: null, dueDate: null, duration: null, status, percent: 0, hoursEstimated: null, hoursActual: 0, labels: [], checklist: [], subtasks: [], createdAt: Date.now(), comments: [] };
-    setProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: [...(p.tasks || []), newTask] } : p));
+    const newTask: Task = { id: lsNextId(), title, desc: "", assignee: null, priority: "media", startDate: null, dueDate: null, duration: null, status, percent: 0, hoursEstimated: null, hoursActual: 0, labels: [], checklist: [], subtasks: [], createdAt: Date.now(), comments: [] };
+    updateProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: [...(p.tasks || []), newTask] } : p));
     setSelectedProj(prev => prev ? { ...prev, tasks: [...(prev.tasks || []), newTask] } : prev);
-    fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, status }) })
-      .then(r => r.ok ? r.json() : null).then(t => { if (t) { setProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: (p.tasks || []).map(x => x.id === newTask.id ? t : x) } : p)); } }).catch(() => {});
+    fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, status }) }).catch(() => {});
   }
 
   async function moveTask(taskId: string, projId: string, newStatus: string) {
-    setProjects(prev => prev.map(p => p.id === projId ? { ...p, tasks: (p.tasks || []).map(t => t.id === taskId ? { ...t, status: newStatus } : t) } : p));
+    updateProjects(prev => prev.map(p => p.id === projId ? { ...p, tasks: (p.tasks || []).map(t => t.id === taskId ? { ...t, status: newStatus } : t) } : p));
     if (selectedProj?.id === projId) setSelectedProj(prev => prev ? { ...prev, tasks: (prev.tasks || []).map(t => t.id === taskId ? { ...t, status: newStatus } : t) } : prev);
     fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: newStatus }) }).catch(() => {});
   }
@@ -688,7 +724,7 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
 
   async function deleteTask(taskId: string, projId: string) {
     if (!confirm("¿Eliminar esta tarea?")) return;
-    setProjects(prev => prev.map(p => p.id === projId ? { ...p, tasks: (p.tasks || []).filter(t => t.id !== taskId) } : p));
+    updateProjects(prev => prev.map(p => p.id === projId ? { ...p, tasks: (p.tasks || []).filter(t => t.id !== taskId) } : p));
     if (selectedProj?.id === projId) setSelectedProj(prev => prev ? { ...prev, tasks: (prev.tasks || []).filter(t => t.id !== taskId) } : prev);
     setSelectedTask(null);
     fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method: "DELETE" }).catch(() => {});
@@ -696,7 +732,7 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
 
   async function deleteProject(projId: string) {
     if (!confirm("¿Eliminar este proyecto y todas sus tareas?")) return;
-    setProjects(prev => prev.filter(p => p.id !== projId));
+    updateProjects(prev => prev.filter(p => p.id !== projId));
     setSelectedProj(null); setSection("projects");
     fetch(`${API_BASE}/api/intranet/projects/${projId}`, { method: "DELETE" }).catch(() => {});
   }
@@ -1083,6 +1119,17 @@ function PMTaskDetail({ task, proj, users, me, onClose, onMove, onDelete, onRelo
   async function saveField(patch: Partial<Task>) {
     const updated = { ...localTask, ...patch };
     setLocalTask(updated);
+    // Guardar en localStorage inmediatamente
+    const projects = lsLoadProjects();
+    const pi = projects.findIndex((p: Project) => p.id === proj.id);
+    if (pi !== -1) {
+      const ti = (projects[pi].tasks || []).findIndex((t: Task) => t.id === localTask.id);
+      if (ti !== -1) {
+        projects[pi].tasks[ti] = { ...projects[pi].tasks[ti], ...patch };
+        lsSaveProjects(projects);
+      }
+    }
+    // Sync servidor en background
     fetch(`${API_BASE}/api/intranet/projects/${proj.id}/tasks/${localTask.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch)
