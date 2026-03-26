@@ -656,11 +656,11 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
 
   async function createTask() {
     if (!ntTitle.trim() || !selectedProj) return;
-    const newTask: Task = { id: localId(), title: ntTitle.trim(), desc: ntDesc, assignee: ntAssignee || null, priority: ntPriority, dueDate: ntDue || null, status: ntStatus, createdAt: Date.now(), comments: [] };
+    const newTask: Task = { id: localId(), title: ntTitle.trim(), desc: ntDesc, assignee: ntAssignee || null, priority: ntPriority, startDate: null, dueDate: ntDue || null, duration: null, status: ntStatus, percent: 0, hoursEstimated: null, hoursActual: 0, labels: [], checklist: [], subtasks: [], createdAt: Date.now(), comments: [] };
     setProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: [...(p.tasks || []), newTask] } : p));
     setSelectedProj(prev => prev ? { ...prev, tasks: [...(prev.tasks || []), newTask] } : prev);
     setNtTitle(""); setNtDesc(""); setNtAssignee(""); setNtPriority("media"); setNtDue(""); setNtStatus("pendiente"); setShowNewTask(false);
-    fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: newTask.title, desc: newTask.desc, assignee: newTask.assignee, priority: newTask.priority, dueDate: newTask.dueDate, status: newTask.status }) })
+    fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: newTask.title, desc: newTask.desc, assignee: newTask.assignee, priority: newTask.priority, startDate: newTask.startDate, dueDate: newTask.dueDate, duration: newTask.duration, status: newTask.status, percent: newTask.percent, hoursEstimated: newTask.hoursEstimated, labels: newTask.labels, checklist: newTask.checklist, subtasks: newTask.subtasks }) })
       .then(r => r.ok ? r.json() : null).then(t => { if (t) { setProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: (p.tasks || []).map(x => x.id === newTask.id ? t : x) } : p)); } }).catch(() => {});
   }
 
@@ -668,7 +668,7 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
     if (!inlineTask.trim() || !selectedProj) return;
     const title = inlineTask.trim();
     setInlineTask("");
-    const newTask: Task = { id: localId(), title, desc: "", assignee: null, priority: "media", dueDate: null, status, createdAt: Date.now(), comments: [] };
+    const newTask: Task = { id: localId(), title, desc: "", assignee: null, priority: "media", startDate: null, dueDate: null, duration: null, status, percent: 0, hoursEstimated: null, hoursActual: 0, labels: [], checklist: [], subtasks: [], createdAt: Date.now(), comments: [] };
     setProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: [...(p.tasks || []), newTask] } : p));
     setSelectedProj(prev => prev ? { ...prev, tasks: [...(prev.tasks || []), newTask] } : prev);
     fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, status }) })
