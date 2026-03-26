@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-// API_BASE: detecta si estamos en el proxy de Perplexity (sites.pplx.app)
+// API_BASE para chat/auth/canales (puerto 5000 del organigrama)
 function detectApiBase(): string {
   const qs = new URLSearchParams(window.location.search);
   const fromParam = qs.get("apibase");
@@ -10,6 +10,9 @@ function detectApiBase(): string {
   return "";
 }
 const API_BASE: string = detectApiBase();
+
+// PM_BASE para proyectos — servidor dedicado con SQLite (puerto 8001)
+const PM_BASE: string = ("__PORT_8001__".startsWith("__")) ? "http://localhost:8001" : "__PORT_8001__";
 
 // ── Proyectos inyectados en el HTML al momento del build ────────
 function lsLoadProjects(): Project[] {
@@ -646,28 +649,21 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
   }
 
   const loadProjects = useCallback(async () => {
-    // 1. Cargar desde localStorage inmediatamente
-    const local = lsLoadProjects();
-    if (local.length > 0) {
-      setProjects(local);
-      if (selectedProj) setSelectedProj(local.find((p: Project) => p.id === selectedProj.id) || null);
-    }
-    // 2. Intentar sincronizar con servidor en background
     try {
-      const data = await fetch(`${API_BASE}/api/intranet/projects`).then(r => r.ok ? r.json() : Promise.reject()).catch(() => null);
-      if (data && Array.isArray(data) && data.length > 0) {
-        // Merge: servidor gana sobre localStorage si tiene datos
+      // Cargar desde servidor SQLite (fuente de verdad)
+      const data = await fetch(`${PM_BASE}/api/intranet/projects`).then(r => r.ok ? r.json() : Promise.reject());
+      if (data && Array.isArray(data)) {
         setProjects(data);
-        lsSaveProjects(data);
         if (selectedProj) setSelectedProj(data.find((p: Project) => p.id === selectedProj.id) || null);
-      } else if (local.length > 0) {
-        // Si servidor está vacío pero localStorage tiene datos, empujar al servidor
-        for (const proj of local) {
-          fetch(`${API_BASE}/api/intranet/projects`, { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: proj.name, desc: proj.desc, color: proj.color, owner: proj.owner, members: proj.members }) }).catch(() => {});
-        }
+        return;
       }
     } catch {}
+    // Fallback: proyectos inyectados en el build
+    const fallback = lsLoadProjects();
+    if (fallback.length > 0) {
+      setProjects(fallback);
+      if (selectedProj) setSelectedProj(fallback.find((p: Project) => p.id === selectedProj.id) || null);
+    }
   }, [selectedProj]);
 
   useEffect(() => { loadProjects(); }, []);
@@ -686,7 +682,7 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
     updateProjects(prev => [...prev, newProj]);
     setNpName(""); setNpDesc(""); setNpColor("#00b8b0"); setShowNewProj(false);
     // Sync servidor en background
-    fetch(`${API_BASE}/api/intranet/projects`, { method: "POST", headers: { "Content-Type": "application/json" },
+    fetch(`${PM_BASE}/api/intranet/projects`, { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: newProj.name, desc: newProj.desc, color: newProj.color, owner: me.username, members: [] }) }).catch(() => {});
   }
 
@@ -696,7 +692,7 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
     updateProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: [...(p.tasks || []), newTask] } : p));
     setSelectedProj(prev => prev ? { ...prev, tasks: [...(prev.tasks || []), newTask] } : prev);
     setNtTitle(""); setNtDesc(""); setNtAssignee(""); setNtPriority("media"); setNtDue(""); setNtStatus("pendiente"); setShowNewTask(false);
-    fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" },
+    fetch(`${PM_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: newTask.title, desc: newTask.desc, assignee: newTask.assignee, priority: newTask.priority, startDate: newTask.startDate, dueDate: newTask.dueDate, duration: newTask.duration, status: newTask.status, percent: newTask.percent, hoursEstimated: newTask.hoursEstimated, labels: newTask.labels, checklist: newTask.checklist, subtasks: newTask.subtasks }) }).catch(() => {});
   }
 
@@ -707,14 +703,14 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
     const newTask: Task = { id: lsNextId(), title, desc: "", assignee: null, priority: "media", startDate: null, dueDate: null, duration: null, status, percent: 0, hoursEstimated: null, hoursActual: 0, labels: [], checklist: [], subtasks: [], createdAt: Date.now(), comments: [] };
     updateProjects(prev => prev.map(p => p.id === selectedProj.id ? { ...p, tasks: [...(p.tasks || []), newTask] } : p));
     setSelectedProj(prev => prev ? { ...prev, tasks: [...(prev.tasks || []), newTask] } : prev);
-    fetch(`${API_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" },
+    fetch(`${PM_BASE}/api/intranet/projects/${selectedProj.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, status }) }).catch(() => {});
   }
 
   async function moveTask(taskId: string, projId: string, newStatus: string) {
     updateProjects(prev => prev.map(p => p.id === projId ? { ...p, tasks: (p.tasks || []).map(t => t.id === taskId ? { ...t, status: newStatus } : t) } : p));
     if (selectedProj?.id === projId) setSelectedProj(prev => prev ? { ...prev, tasks: (prev.tasks || []).map(t => t.id === taskId ? { ...t, status: newStatus } : t) } : prev);
-    fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: newStatus }) }).catch(() => {});
+    fetch(`${PM_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: newStatus }) }).catch(() => {});
   }
 
   async function toggleDone(taskId: string, projId: string, current: string) {
@@ -727,14 +723,14 @@ function ProjectManager({ me, users }: { me: User; users: User[] }) {
     updateProjects(prev => prev.map(p => p.id === projId ? { ...p, tasks: (p.tasks || []).filter(t => t.id !== taskId) } : p));
     if (selectedProj?.id === projId) setSelectedProj(prev => prev ? { ...prev, tasks: (prev.tasks || []).filter(t => t.id !== taskId) } : prev);
     setSelectedTask(null);
-    fetch(`${API_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method: "DELETE" }).catch(() => {});
+    fetch(`${PM_BASE}/api/intranet/projects/${projId}/tasks/${taskId}`, { method: "DELETE" }).catch(() => {});
   }
 
   async function deleteProject(projId: string) {
     if (!confirm("¿Eliminar este proyecto y todas sus tareas?")) return;
     updateProjects(prev => prev.filter(p => p.id !== projId));
     setSelectedProj(null); setSection("projects");
-    fetch(`${API_BASE}/api/intranet/projects/${projId}`, { method: "DELETE" }).catch(() => {});
+    fetch(`${PM_BASE}/api/intranet/projects/${projId}`, { method: "DELETE" }).catch(() => {});
   }
 
   const proj = selectedProj;
@@ -1130,7 +1126,7 @@ function PMTaskDetail({ task, proj, users, me, onClose, onMove, onDelete, onRelo
       }
     }
     // Sync servidor en background
-    fetch(`${API_BASE}/api/intranet/projects/${proj.id}/tasks/${localTask.id}`, {
+    fetch(`${PM_BASE}/api/intranet/projects/${proj.id}/tasks/${localTask.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch)
     }).catch(() => {});
@@ -1139,12 +1135,12 @@ function PMTaskDetail({ task, proj, users, me, onClose, onMove, onDelete, onRelo
 
   async function addComment() {
     if (!comment.trim()) return;
-    await fetch(`${API_BASE}/api/intranet/projects/${proj.id}/tasks/${localTask.id}/comments`, {
+    await fetch(`${PM_BASE}/api/intranet/projects/${proj.id}/tasks/${localTask.id}/comments`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ from: me.username, text: comment })
     });
     setComment(""); onReload();
-    const projs = await fetch(`${API_BASE}/api/intranet/projects`).then(r => r.json()).catch(() => []);
+    const projs = await fetch(`${PM_BASE}/api/intranet/projects`).then(r => r.json()).catch(() => []);
     const p = projs.find((p: Project) => p.id === proj.id);
     const t = p?.tasks?.find((t: Task) => t.id === localTask.id);
     if (t) setLocalTask({ startDate: null, duration: null, percent: 0, hoursEstimated: null, hoursActual: 0, labels: [], checklist: [], subtasks: [], ...t });
