@@ -11,11 +11,19 @@ function detectApiBase(): string {
 }
 const API_BASE: string = detectApiBase();
 
-// PM_BASE para proyectos — usa __PORT_5000__ (mismo proxy que el organigrama)
-// deploy_website reemplaza __PORT_5000__ en archivos JS de Vite automáticamente
-// El valor reemplazado es "port/5000" (sin slash), le agregamos el slash
-const _RAW_PORT = "__PORT_5000__";
-const PM_BASE: string = _RAW_PORT.startsWith("__") ? "" : ("/" + _RAW_PORT);
+// PM_BASE para proyectos — URL absoluta del servidor
+// Prioridad: 1) ?apibase= pasado por el organigrama (URL absoluta correcta)
+//            2) __PORT_5000__ reemplazado por deploy (relativo, funciona desde la raíz)
+//            3) vacío (desarrollo local)
+function detectPmBase(): string {
+  const qs = new URLSearchParams(window.location.search);
+  const apibase = qs.get("apibase");
+  if (apibase && apibase.length > 0) return apibase; // URL absoluta del organigrama
+  const raw = "__PORT_5000__";
+  if (!raw.startsWith("__")) return "/" + raw;       // deploy_website reemplazó
+  return "";                                          // desarrollo local
+}
+const PM_BASE: string = detectPmBase();
 
 // ── Proyectos inyectados en el HTML al momento del build ────────
 function lsLoadProjects(): Project[] {
