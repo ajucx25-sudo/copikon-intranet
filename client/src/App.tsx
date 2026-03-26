@@ -11,8 +11,11 @@ function detectApiBase(): string {
 }
 const API_BASE: string = detectApiBase();
 
-// PM_BASE para proyectos — servidor dedicado con SQLite (puerto 8001)
-const PM_BASE: string = ("__PORT_8001__".startsWith("__")) ? "http://localhost:8001" : "__PORT_8001__";
+// PM_BASE para proyectos — usa __PORT_5000__ (mismo proxy que el organigrama)
+// deploy_website reemplaza __PORT_5000__ en archivos JS de Vite automáticamente
+// El valor reemplazado es "port/5000" (sin slash), le agregamos el slash
+const _RAW_PORT = "__PORT_5000__";
+const PM_BASE: string = _RAW_PORT.startsWith("__") ? "" : ("/" + _RAW_PORT);
 
 // ── Proyectos inyectados en el HTML al momento del build ────────
 function lsLoadProjects(): Project[] {
